@@ -19,8 +19,6 @@ COPY requirements.txt .
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-
-
 # Copy the application code into the container at /app
 COPY check_internet.sh .
 COPY internet_status_dashboard.py .
