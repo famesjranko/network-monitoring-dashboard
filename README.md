@@ -2,6 +2,10 @@
 
 This project provides a containerized solution for monitoring internet connectivity and managing a network device (specifically, a Tapo smart plug connected to an NBN modem/router).
 
+## Dash Web App Interface
+
+![Dash Web App Screenshot](screenshots/dashboard.png)
+
 ## Features
 
 - **Internet Connectivity Monitoring:** Continuously checks internet status by pinging external servers and logs the results (success rate, latency, packet loss) to an SQLite database.
