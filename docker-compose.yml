@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  local-network-monitor:
+    build: .
+    container_name: local-network-monitor-container
+    ports:
+      - "8050:8050"
+    #environment:
+    #  - TAPO_EMAIL=
+    #  - TAPO_PASSWORD=
+    #  - TAPO_DEVICE_IP=
+    #  - TAPO_DEVICE_NAME=

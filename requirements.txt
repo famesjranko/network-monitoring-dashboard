@@ -1,0 +1,6 @@
+dash[async]
+flask-caching
+pandas
+
+redis
+tapo
