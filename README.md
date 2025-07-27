@@ -106,7 +106,7 @@ This single-container approach simplifies deployment and management.
 
 ### Environment Variables
 
-These variables **can be set** in your `docker-compose.yml` file for the power cycling feature to work - of not set or not valid, restart button will be greyed out unavailable.
+These variables **can be set** in your `docker-compose.yml` file for the power cycling feature to work - if not set or not valid, restart button will be greyed out unavailable.
 
 | Variable           | Description                                  |
 | :----------------- | :------------------------------------------- |
