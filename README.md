@@ -104,14 +104,14 @@ This single-container approach simplifies deployment and management.
 
 ### Environment Variables
 
-These variables **must be set** in your `docker-compose.yml` file for the power cycling feature to work.
+These variables **can be set** in your `docker-compose.yml` file for the power cycling feature to work - of not set or not valid, restart button will be greyed out unavailable.
 
 | Variable           | Description                                  |
 | :----------------- | :------------------------------------------- |
-| `TAPO_EMAIL`       | **Required.** Your Tapo account email.       |
-| `TAPO_PASSWORD`    | **Required.** Your Tapo account password.    |
-| `TAPO_DEVICE_IP`   | **Required.** The static IP of your Tapo plug. |
-| `TAPO_DEVICE_NAME` | An optional friendly name for your device.   |
+| `TAPO_EMAIL`       | **Optional.** Your Tapo account email.       |
+| `TAPO_PASSWORD`    | **Optional.** Your Tapo account password.    |
+| `TAPO_DEVICE_IP`   | **Optional.** The static IP of your Tapo plug. |
+| `TAPO_DEVICE_NAME` | **Optional.** friendly name for your device.   |
 
 ### Script Parameters
 
@@ -151,7 +151,7 @@ To stop the container, run:
 docker-compose down
 ```
 
-### ⚠️ Data Persistence (Important\!)
+### ⚠️ Data Persistence (Optional\!)
 
 By default, the SQLite database (`internet_status.db`) is stored inside the container. **This means all historical data will be deleted if you run `docker-compose down`**.
 
