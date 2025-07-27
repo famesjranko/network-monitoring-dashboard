@@ -7,7 +7,7 @@ import os
 import sys
 from datetime import datetime
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath(sys.argv[0])) 
+SCRIPT_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
 
 # Set up logging configuration
 logging.basicConfig(
@@ -24,7 +24,7 @@ device_name = os.environ.get("TAPO_DEVICE_NAME")
 
 # Cooldown settings
 COOLDOWN_FILE=os.path.join(SCRIPT_DIR, 'logs/cooldown.txt')
-COOLDOWN_PERIOD = 3600  # 1 hr cooldown in seconds (3600 seconds = 1 hr)
+COOLDOWN_PERIOD = int(os.environ.get("TAPO_COOLDOWN_SECONDS", 3600))  # 1 hr cooldown in seconds (3600 seconds = 1 hr)
 
 # The time to wait between turning off and on the device (in seconds)
 wait_time = 30  # You can change this to any number of seconds
