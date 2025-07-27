@@ -17,7 +17,6 @@ If the connection is down for a sustained period, it can **automatically power c
   * **👆 Manual Override:** A "Restart NBN" button on the dashboard allows you to trigger a power cycle manually at any time.
   * **🚀 Simple Docker Setup:** Get up and running with a single `docker-compose up` command. No need to manually install any dependencies.
   * **🗄️ SQLite Logging:** All connectivity data is logged to an SQLite database within the container.
-  * **⚙️ Highly Configurable:** Easily configure Tapo credentials, ping targets, and failure thresholds.
 
 -----
 
