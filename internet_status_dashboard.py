@@ -9,6 +9,7 @@ from flask_caching import Cache
 import redis
 import os
 import sys
+import re
 import logging
 import socket
 import asyncio
@@ -368,7 +369,7 @@ app.layout = html.Div([
         n_intervals=0
     ),
 
-    # Interval for checking the internet connection every 10 seconds
+    # Interval for checking the internet connection every 5 seconds
     dcc.Interval(id='internet-interval', interval=5 * 1000, n_intervals=0)
 
 ], style={'backgroundColor': '#121212', 'padding': '20px'})
