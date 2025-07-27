@@ -37,6 +37,65 @@ cache = Cache(app.server, config={
     'CACHE_DEFAULT_TIMEOUT': 60,  # Cache timeout in seconds (5 minutes)
 })
 
+# --- Live internet status check for the badge ---
+async def check_live_internet_status_for_badge():
+    targets = ["8.8.8.8", "1.1.1.1", "9.9.9.9"]
+    ping_count_per_target = 1 # One ping per target for speed
+    ping_timeout = 1 # 1 second timeout for responsiveness
+
+    successful_pings = 0
+    total_pings = len(targets) * ping_count_per_target
+
+    for target in targets:
+        try:
+            # Use -c 1 for one packet, -W 1 for a 1-second timeout
+            # Use -n for numeric output only (no reverse DNS lookup, faster)
+            command = ["ping", "-c", str(ping_count_per_target), "-W", str(ping_timeout), target]
+            
+            # Run ping command and capture output
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            ping_output = stdout.decode().strip()
+            logger.info(f"Internet status badge, ping output:{ping_output}")
+
+            if process.returncode == 0:
+                # Ping was successful, parse for successful packets
+                # Example: "1 packets transmitted, 1 received, 0% packet loss"
+                match = re.search(r'(\d+)\s+received', ping_output)
+                if match:
+                    received_count = int(match.group(1))
+                    successful_pings += received_count
+            else:
+                logger.debug(f"Ping to {target} failed or timed out. Error: {stderr.decode().strip()}")
+
+        except Exception as e:
+            logger.error(f"Error during live ping check for {target}: {e}")
+            # Do not increment successful_pings as it failed
+
+    success_percentage = 0
+    if total_pings > 0:
+        success_percentage = int((successful_pings / total_pings) * 100)
+
+    status_text = "Internet: Unknown"
+    bg_color = '#808080' # Gray
+
+    if success_percentage == 100:
+        status_text = "Internet: Up"
+        bg_color = '#4CAF50'  # Green
+    elif success_percentage > 0:
+        status_text = "Internet: Partially Up"
+        bg_color = '#ffcc00' # Orange
+    else:
+        status_text = "Internet: Down"
+        bg_color = '#ff6666'  # Red
+
+    logger.info(f"Live Internet Status: {status_text} ({success_percentage}% success)")
+    return status_text, bg_color
+
 # Function to read and parse data from the SQLite database
 def parse_log(db_path):
     """
@@ -687,54 +746,26 @@ def trigger_power_cycle(n_clicks):
             return "", 'idle'
     return "", 'idle'
 
-# Callback to update the internet connection status with dynamic color
+# Callback to update the internet connection status with dynamic color (NOW LIVE PING)
 @app.callback(
     Output('internet-status', 'children'),
     Output('internet-status', 'style'),
     Input('internet-interval', 'n_intervals')
 )
-def update_internet_status(n):
-    # Determine the directory of the current script
-    SCRIPT_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
-    db_path = os.path.join(SCRIPT_DIR, 'logs/internet_status.db')
-
-    try:
-        conn = sqlite3.connect(db_path)
-        query = "SELECT success_percentage FROM internet_status ORDER BY timestamp DESC LIMIT 1"
-        cursor = conn.cursor()
-        cursor.execute(query)
-        latest_success_percentage = cursor.fetchone()
-        conn.close()
-
-        if latest_success_percentage:
-            success_percentage = latest_success_percentage[0]
-            if success_percentage == 100:
-                status_text = "Internet: Up"
-                bg_color = '#4CAF50'  # Green
-            elif success_percentage > 0:
-                status_text = "Internet: Partially Up"
-                bg_color = '#ffcc00' # Orange
-            else:
-                status_text = "Internet: Down"
-                bg_color = '#ff6666'  # Red
-        else:
-            status_text = "Internet: Unknown"
-            bg_color = '#808080' # Gray for unknown
-
-    except Exception as e:
-        logger.error(f"Error fetching latest success percentage for badge: {e}")
-        status_text = "Internet: Error"
-        bg_color = '#808080' # Gray for error
+async def update_internet_status_live(n):
+    # This calls the new live ping function
+    status_text, bg_color = await check_live_internet_status_for_badge()
 
     return status_text, {
         'backgroundColor': bg_color,
-        'color': '#1e1e1e',
+        'color': '#FFFFFF' if bg_color == '#808080' else '#1e1e1e', # White text for gray, dark for others
         'textAlign': 'center',
         'fontSize': '18px',
         'padding': '8px 15px',
         'borderRadius': '5px',
         'fontWeight': 'bold',
         'font-family': 'Arial, sans-serif',
+        'minWidth': '220px' # Maintain consistent width
     }
 
 if __name__ == '__main__':
