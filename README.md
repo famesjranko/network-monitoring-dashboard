@@ -17,7 +17,6 @@ If the connection is down for a sustained period, it can **automatically power c
   * **👆 Manual Override:** A "Restart NBN" button on the dashboard allows you to trigger a power cycle manually at any time.
   * **🚀 Simple Docker Setup:** Get up and running with a single `docker-compose up` command. No need to manually install any dependencies.
   * **🗄️ SQLite Logging:** All connectivity data is logged to an SQLite database within the container.
-  * **⚙️ Highly Configurable:** Easily configure Tapo credentials, ping targets, and failure thresholds.
 
 -----
 
@@ -43,14 +42,13 @@ git clone https://github.com/famesjranko/docker-network-monitor-dash.git
 cd docker-network-monitor-dash
 ```
 
-### 3\. Configure Docker Compose
+### 3. Configure Docker Compose
 
-If using TP-Link Tapo smart plug, open the **`docker-compose.yml`** file. Uncomment the `environment` section and fill in your Tapo smart plug credentials and IP address:
+To customize monitoring behavior or enable TP-Link Tapo smart plug control, open the `docker-compose.yml` file and uncomment the `environment` section. Then fill in the values as needed:
 
 ```yaml
-# docker-compose.yml
-
 version: '3.8'
+
 services:
   local-network-monitor:
     build: .
@@ -58,15 +56,37 @@ services:
     ports:
       - "8050:8050"
     environment:
-      - TAPO_EMAIL=your_tapo_email@example.com
-      - TAPO_PASSWORD=your_super_secret_password
-      - TAPO_DEVICE_IP=192.168.1.100
-      - TAPO_DEVICE_NAME="NBN Modem Plug"
+      # Comma-separated list of IPs to ping for internet connectivity checks
+      # - Defaults to 8.8.8.8,1.1.1.1,9.9.9.9 if not set
+      # - Example: INTERNET_CHECK_TARGETS=1.1.1.1,8.8.4.4
+      # - INTERNET_CHECK_TARGETS=8.8.8.8,1.1.1.1,9.9.9.9
+
+      # Tapo credentials and device details for controlling the smart plug
+      # Required only if using a Tapo P100 to power cycle your modem/router
+      # - TAPO_EMAIL=your_tapo_email@example.com
+      # - TAPO_PASSWORD=your_super_secret_password
+      # - TAPO_DEVICE_IP=192.168.1.100
+      # - TAPO_DEVICE_NAME="NBN Modem Plug"
+
+      # Cooldown period in seconds between allowed modem reboots (via smart plug)
+      # Prevents repeated power cycles within a short period
+      # - Default: 3600 (1 hour)
+      # - Example: TAPO_COOLDOWN_SECONDS=1800
+      # - TAPO_COOLDOWN_SECONDS=3600
+
+      # Number of consecutive failed checks before triggering power cycle
+      # - Default: 5
+      # - Example: FAILURE_THRESHOLD=3
+      # - FAILURE_THRESHOLD=5
 ```
 
-**Note:** It's highly recommended to set a static IP address for your Tapo plug in your router's DHCP settings for reliable operation.
+**Notes:**
 
-Otherwise, if not using TP-Link Tapo, just leave docker-compose environment settings commented out.
+* `INTERNET_CHECK_TARGETS` and `FAILURE_THRESHOLD` work independently of Tapo and are always respected.
+* If you're **not using a Tapo smart plug**, just leave the Tapo-related variables commented out.
+* It's recommended to assign a **static IP address** to your Tapo plug via your router's DHCP settings to ensure stable communication.
+
+---
 
 ### 4\. Build and Run the Container
 
@@ -106,32 +126,19 @@ This single-container approach simplifies deployment and management.
 
 ### Environment Variables
 
-These variables **can be set** in your `docker-compose.yml` file for the power cycling feature to work - if not set or not valid, restart button will be greyed out unavailable.
+These variables can be set in your `docker-compose.yml` file to customize monitoring behavior and enable automated power cycling. Tapo-related variables are optional — if not set or invalid, the **"Restart NBN"** button will be disabled and automatic power cycling will be skipped.
 
-| Variable           | Description                                  |
-| :----------------- | :------------------------------------------- |
-| `TAPO_EMAIL`       | **Optional.** Your Tapo account email.       |
-| `TAPO_PASSWORD`    | **Optional.** Your Tapo account password.    |
-| `TAPO_DEVICE_IP`   | **Optional.** The static IP of your Tapo plug. |
-| `TAPO_DEVICE_NAME` | **Optional.** friendly name for your device.   |
+| Variable                 | Description                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| `INTERNET_CHECK_TARGETS` | Comma-separated list of IPs to ping. Default: `8.8.8.8,1.1.1.1,9.9.9.9`. Works without Tapo. |
+| `FAILURE_THRESHOLD`      | Number of consecutive failed checks required to trigger a power cycle. Default: `5`.         |
+| `TAPO_EMAIL`             | **Optional.** Your Tapo account email (used for smart plug control).                         |
+| `TAPO_PASSWORD`          | **Optional.** Your Tapo account password.                                                    |
+| `TAPO_DEVICE_IP`         | **Optional.** Static IP address of your Tapo plug (recommended to reserve via DHCP).         |
+| `TAPO_DEVICE_NAME`       | **Optional.** Friendly display name for your smart plug device (used in logs and UI).        |
+| `TAPO_COOLDOWN_SECONDS`  | **Optional.** Cooldown (in seconds) between allowed modem reboots. Default: `3600` (1 hour). |
 
-### Script Parameters
-
-For more advanced tuning, you can modify the monitoring script directly by editing the **`check_internet.sh`** file:
-
-  * **Ping Targets:** To change which servers are pinged, modify the `TARGETS` array.
-
-    ```bash
-    # check_internet.sh
-    TARGETS=("8.8.8.8" "1.1.1.1" "8.8.4.4")
-    ```
-
-  * **Failure Threshold:** To adjust how many failures trigger a reboot, change the `FAILURE_THRESHOLD` variable.
-
-    ```bash
-    # check_internet.sh
-    FAILURE_THRESHOLD=5
-    ```
+> 💡 `INTERNET_CHECK_TARGETS` and `FAILURE_THRESHOLD` are used even if you're not using a Tapo plug.
 
 -----
 
