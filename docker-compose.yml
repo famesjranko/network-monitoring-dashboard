@@ -22,3 +22,8 @@ services:
       # Prevents repeated power cycles within a short period.
       # - Example: 3600 (1 hour)
       # - TAPO_COOLDOWN_SECONDS=3600
+
+      # Number of consecutive failed checks before triggering power cycle
+      # - Default: 5
+      # - Example: FAILURE_THRESHOLD=3
+      # - FAILURE_THRESHOLD=5
