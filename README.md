@@ -45,7 +45,7 @@ cd docker-network-monitor-dash
 
 ### 3\. Configure Docker Compose
 
-Open the **`docker-compose.yml`** file. Uncomment the `environment` section and fill in your Tapo smart plug credentials and IP address:
+If using TP-Link Tapo smart plug, open the **`docker-compose.yml`** file. Uncomment the `environment` section and fill in your Tapo smart plug credentials and IP address:
 
 ```yaml
 # docker-compose.yml
@@ -65,6 +65,8 @@ services:
 ```
 
 **Note:** It's highly recommended to set a static IP address for your Tapo plug in your router's DHCP settings for reliable operation.
+
+Otherwise, if not using TP-Link Tapo, just leave docker-compose environment settings commented out.
 
 ### 4\. Build and Run the Container
 
