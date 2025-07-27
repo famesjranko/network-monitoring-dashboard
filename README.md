@@ -1,78 +1,177 @@
-# Containerized Network Monitor Dashboard
+# Containerized Internet Monitor with Dash & Tapo Power Cycling
 
-This project provides a containerized solution for monitoring internet connectivity and managing a network device (specifically, a Tapo smart plug connected to an NBN modem/router).
+[](https://www.python.org/)
+[](https://www.docker.com/)
+[](https://dash.plotly.com/)
 
-## Dash Web App Interface
+This project provides a self-contained, easy-to-deploy solution for monitoring your internet connectivity. It periodically pings external targets, logs the results to an SQLite database, and visualizes the data on a web dashboard.
+
+If the connection is down for a sustained period, it can **automatically power cycle your modem/router** using a TP-Link Tapo smart plug. The entire system is packaged into a single Docker container, making setup incredibly simple.
+
+-----
+
+## ✨ Features
+
+  * **📊 Interactive Web Dashboard:** Visualize internet health with real-time graphs for uptime, latency, and packet loss using a Plotly Dash interface.
+  * **🤖 Automated Power Cycling:** Automatically reboots your modem via a Tapo P100 smart plug after 5 consecutive failed checks.
+  * **👆 Manual Override:** A "Restart NBN" button on the dashboard allows you to trigger a power cycle manually at any time.
+  * **🚀 Simple Docker Setup:** Get up and running with a single `docker-compose up` command. No need to manually install any dependencies.
+  * **🗄️ SQLite Logging:** All connectivity data is logged to an SQLite database within the container.
+  * **⚙️ Highly Configurable:** Easily configure Tapo credentials, ping targets, and failure thresholds.
+
+-----
+
+## 📊 Web Dashboard Interface
 
 ![Dash Web App Screenshot](screenshots/dashboard.png)
 
-## Features
+-----
 
-- **Internet Connectivity Monitoring:** Continuously checks internet status by pinging external servers and logs the results (success rate, latency, packet loss) to an SQLite database.
-- **Web Dashboard:** A web interface built with Dash displays real-time and historical internet connectivity data. It includes graphs for success rate, latency, and packet loss, and a detailed log table.
-- **Automated Power Cycling (Tapo):** Automatically power cycles a configured Tapo smart plug if internet connectivity is lost for a sustained period (5 consecutive failures).
-- **Manual Power Cycling (Tapo):** Provides a button on the web dashboard to manually trigger a power cycle of the configured Tapo smart plug. This button is enabled only if Tapo credentials are set and a connection to the device can be established.
-- **Redis Caching:** Utilizes Redis for caching dashboard data to improve performance.
+## 🚀 Quickstart
 
-## Getting Started
+Getting the monitor running is simple. You just need Docker and Docker Compose installed.
 
-These instructions will get you a copy of the project up and running on your local machine.
+### 1\. Prerequisites
 
-### Prerequisites
+  * [Docker](https://docs.docker.com/get-docker/)
+  * [Docker Compose](https://docs.docker.com/compose/install/)
 
-- Docker and Docker Compose installed on your system.
-- A Tapo smart plug connected to your network, with its IP address, email, and password known.
+### 2\. Clone the Repository
 
-### Installation and Setup
+```bash
+git clone https://github.com/famesjranko/docker-network-monitor-dash.git
+cd docker-network-monitor-dash
+```
 
-1.  **Clone the repository:**
+### 3\. Configure Docker Compose
+
+Open the **`docker-compose.yml`** file. Uncomment the `environment` section and fill in your Tapo smart plug credentials and IP address:
+
+```yaml
+# docker-compose.yml
+
+version: '3.8'
+services:
+  local-network-monitor:
+    build: .
+    container_name: local-network-monitor-container
+    ports:
+      - "8050:8050"
+    environment:
+      - TAPO_EMAIL=your_tapo_email@example.com
+      - TAPO_PASSWORD=your_super_secret_password
+      - TAPO_DEVICE_IP=192.168.1.100
+      - TAPO_DEVICE_NAME="NBN Modem Plug"
+```
+
+**Note:** It's highly recommended to set a static IP address for your Tapo plug in your router's DHCP settings for reliable operation.
+
+### 4\. Build and Run the Container
+
+From the project's root directory, launch the application:
+
+```bash
+docker-compose up --build -d
+```
+
+### 5\. Access the Dashboard
+
+Open your web browser and navigate to:
+
+**`http://localhost:8050`**
+
+(Replace `localhost` with the IP address of your host machine if you're accessing it from another device on your network).
+
+-----
+
+## 🏗️ System Architecture
+
+This project runs within a **single, all-in-one Docker container**.
+
+The `Dockerfile` builds an image based on Python 3.8 and installs all necessary components: `ping`, `sqlite3`, the `redis-server`, and `supervisor`.
+
+Inside the container, `supervisord` is responsible for running and managing three key processes simultaneously:
+
+1.  **Redis Server:** A local Redis instance for caching dashboard data.
+2.  **Monitoring Script (`check_internet.sh`):** A shell script that runs every minute to ping targets and log results.
+3.  **Dash Web App (`internet_status_dashboard.py`):** A Gunicorn server that hosts the Python web application.
+
+This single-container approach simplifies deployment and management.
+
+-----
+
+## 🔧 Configuration
+
+### Environment Variables
+
+These variables **must be set** in your `docker-compose.yml` file for the power cycling feature to work.
+
+| Variable           | Description                                  |
+| :----------------- | :------------------------------------------- |
+| `TAPO_EMAIL`       | **Required.** Your Tapo account email.       |
+| `TAPO_PASSWORD`    | **Required.** Your Tapo account password.    |
+| `TAPO_DEVICE_IP`   | **Required.** The static IP of your Tapo plug. |
+| `TAPO_DEVICE_NAME` | An optional friendly name for your device.   |
+
+### Script Parameters
+
+For more advanced tuning, you can modify the monitoring script directly by editing the **`check_internet.sh`** file:
+
+  * **Ping Targets:** To change which servers are pinged, modify the `TARGETS` array.
+
     ```bash
-    git clone <your-repository-url>
-    cd local-network-monitor-dashboard
+    # check_internet.sh
+    TARGETS=("8.8.8.8" "1.1.1.1" "8.8.4.4")
     ```
 
-2.  **Configure Tapo Credentials:**
-    Create a `.env` file in the project root directory (or set them directly in your environment or `docker-compose.yml` for production) with your Tapo device details:
+  * **Failure Threshold:** To adjust how many failures trigger a reboot, change the `FAILURE_THRESHOLD` variable.
 
-    ```
-    TAPO_EMAIL=your_tapo_email
-    TAPO_PASSWORD=your_tapo_password
-    TAPO_DEVICE_IP=your_tapo_device_ip
-    TAPO_DEVICE_NAME="Your Device Name"
-    ```
-    *Note: `TAPO_DEVICE_IP` should be the local IP address of your Tapo smart plug.*
-
-3.  **Build and Run with Docker Compose:**
-    Navigate to the project root directory and run:
     ```bash
-    docker-compose up --build -d
+    # check_internet.sh
+    FAILURE_THRESHOLD=5
     ```
-    This command will:
-    - Build the Docker image for the network monitor.
-    - Create and start the `local-network-monitor-container`.
-    - Run `supervisord` inside the container to manage the internet checking script and the web dashboard.
 
-### Accessing the Dashboard
+-----
 
-The dashboard will be accessible in your web browser at `http://localhost:8050`.
+## ⚙️ Usage and Management
 
-## Usage
+### Checking Logs
 
-- The dashboard displays the current internet status (Up, Partially Up, or Down) and historical data through interactive graphs and a detailed log table.
-- The "Restart NBN" button allows for manual power cycling of your NBN modem/router via the Tapo smart plug. This button will be greyed out and disabled if the Tapo credentials are not correctly configured or if the device cannot be reached.
+To view the real-time logs from the application (including ping results and errors), run:
 
-## Project Structure
+```bash
+docker-compose logs -f local-network-monitor
+```
 
-- `Dockerfile`: Defines the Docker image for the application.
-- `docker-compose.yml`: Orchestrates the Docker container setup and defines environment variables.
-- `requirements.txt`: Lists Python dependencies, including `dash[async]` for asynchronous operations and `tapo` for Tapo device control.
-- `supervisord.conf`: Configures `supervisord` to manage the `check_internet.sh` script and the `internet_status_dashboard.py` application.
-- `check_internet.sh`: A shell script that periodically checks internet connectivity and logs status to an SQLite database. It also triggers automated power cycles.
-- `internet_status_dashboard.py`: The main Dash application that provides the web dashboard and handles manual power cycle requests.
-- `power_cycle_nbn.py`: Python script executed by `check_internet.sh` to perform automated power cycling of the Tapo device.
-- `power_cycle_nbn_override.py`: Python script executed by the dashboard to perform manual power cycling of the Tapo device.
+### Stopping the Application
 
-## Important Considerations
+To stop the container, run:
 
-- **Tapo Credentials:** Ensure your `TAPO_EMAIL`, `TAPO_PASSWORD`, `TAPO_DEVICE_IP`, and `TAPO_DEVICE_NAME` environment variables are correctly set in your `docker-compose.yml` or `.env` file. The functionality of the "Restart NBN" button and automated power cycling depends on these being valid and the device being reachable.
-- **Logging:** The system logs internet status and power cycle events to an SQLite database (`logs/internet_status.db`) and to the container's standard output. Review these logs for operational insights and troubleshooting.
+```bash
+docker-compose down
+```
+
+### ⚠️ Data Persistence (Important\!)
+
+By default, the SQLite database (`internet_status.db`) is stored inside the container. **This means all historical data will be deleted if you run `docker-compose down`**.
+
+To make your data persistent, you must add a **volume mount** to your `docker-compose.yml` file. This links the `logs` directory inside the container to a `logs` directory on your host machine.
+
+Modify your `docker-compose.yml` to include the `volumes` section like this:
+
+```yaml
+# docker-compose.yml
+
+services:
+  local-network-monitor:
+    build: .
+    container_name: local-network-monitor-container
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./logs:/app/logs  # <-- Add this line
+    environment:
+      # ... your environment variables
+```
+
+With this change, your database will be safe on your local machine, even if the container is removed.
