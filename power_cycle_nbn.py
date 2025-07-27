@@ -65,6 +65,12 @@ def update_cooldown_file():
     logging.info("Cooldown file updated with the current timestamp.")
 
 async def control_tapo():
+
+    if not all([email, password, device_ip]):
+        logging.critical("Tapo credentials (email, password, or IP) are not set as environment variables. "
+                         "Cannot proceed with Tapo device control. Please set TAPO_EMAIL, TAPO_PASSWORD, and TAPO_DEVICE_IP.")
+        return # Exit
+
     try:
         # Check if we are within cooldown period
         if is_in_cooldown():
