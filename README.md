@@ -42,13 +42,11 @@ git clone https://github.com/famesjranko/docker-network-monitor-dash.git
 cd docker-network-monitor-dash
 ```
 
-### 3\. Configure Docker Compose
+### 3. Configure Docker Compose
 
-If using TP-Link Tapo smart plug, open the **`docker-compose.yml`** file. Uncomment the `environment` section and fill in your Tapo smart plug credentials and IP address:
+To customize monitoring behavior or enable TP-Link Tapo smart plug control, open the `docker-compose.yml` file and uncomment the `environment` section. Then fill in the values as needed:
 
 ```yaml
-# docker-compose.yml
-
 version: '3.8'
 services:
   local-network-monitor:
@@ -57,15 +55,33 @@ services:
     ports:
       - "8050:8050"
     environment:
-      - TAPO_EMAIL=your_tapo_email@example.com
-      - TAPO_PASSWORD=your_super_secret_password
-      - TAPO_DEVICE_IP=192.168.1.100
-      - TAPO_DEVICE_NAME="NBN Modem Plug"
+      # Comma-separated list of IPs to ping for internet connectivity checks.
+      # You can override the defaults to suit your network.
+      # - Default: 8.8.8.8,1.1.1.1,9.9.9.9
+      # - Example: INTERNET_CHECK_TARGETS=1.1.1.1,8.8.4.4
+      # - INTERNET_CHECK_TARGETS=8.8.8.8,1.1.1.1,9.9.9.9
+
+      # Tapo credentials and device details for controlling the smart plug (optional).
+      # Required only if using a Tapo P100 to power cycle your modem/router.
+      # - TAPO_EMAIL=your_tapo_email@example.com
+      # - TAPO_PASSWORD=your_super_secret_password
+      # - TAPO_DEVICE_IP=192.168.1.100
+      # - TAPO_DEVICE_NAME="NBN Modem Plug"
+
+      # Cooldown period (in seconds) between allowed modem reboots via smart plug.
+      # Prevents repeated power cycling too frequently.
+      # - Default: 3600 (1 hour)
+      # - Example: TAPO_COOLDOWN_SECONDS=1800
+      # - TAPO_COOLDOWN_SECONDS=3600
 ```
 
-**Note:** It's highly recommended to set a static IP address for your Tapo plug in your router's DHCP settings for reliable operation.
+**Notes:**
 
-Otherwise, if not using TP-Link Tapo, just leave docker-compose environment settings commented out.
+* `INTERNET_CHECK_TARGETS` works regardless of whether Tapo is used.
+* If you're not using a Tapo smart plug, leave the Tapo-related variables commented out.
+* It’s recommended to assign a static IP to your Tapo plug in your router’s DHCP settings to ensure consistent operation.
+
+---
 
 ### 4\. Build and Run the Container
 
