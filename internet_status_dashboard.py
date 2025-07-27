@@ -15,7 +15,7 @@ import socket
 import asyncio
 from tapo import ApiClient
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath(sys.argv[0])) 
+SCRIPT_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
 
 # Configure logging to stdout
 logging.basicConfig(
@@ -40,7 +40,11 @@ cache = Cache(app.server, config={
 
 # --- Live internet status check for the badge ---
 async def check_live_internet_status_for_badge():
-    targets = ["8.8.8.8", "1.1.1.1", "9.9.9.9"]
+
+    # get env IPs or fallback to defaults
+    raw_targets = os.environ.get("INTERNET_CHECK_TARGETS", "8.8.8.8,1.1.1.1,9.9.9.9")
+    targets = [ip.strip() for ip in raw_targets.split(",")]
+
     ping_count_per_target = 1 # One ping per target for speed
     ping_timeout = 1 # 1 second timeout for responsiveness
 

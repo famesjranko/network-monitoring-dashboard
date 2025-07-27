@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Targets array
-TARGETS=("8.8.8.8" "1.1.1.1" "9.9.9.9")
+# --- ENV-based ping targets or fallback defaults ---
+DEFAULT_TARGETS="8.8.8.8,1.1.1.1,9.9.9.9"
+IFS=',' read -ra TARGETS <<< "${INTERNET_CHECK_TARGETS:-$DEFAULT_TARGETS}"
+echo "setting check internet target ping IPs: ${TARGETS[*]}"
 
 # File references
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
