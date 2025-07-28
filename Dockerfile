@@ -10,7 +10,8 @@ RUN apt-get update && \
         iputils-ping \
         sqlite3 \
         redis-server \
-        supervisor && \
+        supervisor \
+        curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Configure Redis to limit memory usage
@@ -40,6 +41,10 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Expose port for the Dash app
 EXPOSE 8050
+
+# Health check for dashboard
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl --fail http://localhost:8050/health || exit 1
 
 # Start supervisord
 CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
