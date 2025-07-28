@@ -38,7 +38,7 @@ Getting the monitor running is simple. You just need Docker and Docker Compose i
 ### 2\. Clone the Repository
 
 ```bash
-git clone https://github.com/famesjranko/docker-network-monitor-dash.git
+git clone https://github.com/famesjranko/network-monitoring-dashboard.git
 cd docker-network-monitor-dash
 ```
 
