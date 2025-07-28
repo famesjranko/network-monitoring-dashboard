@@ -2,8 +2,9 @@ version: '3.8'
 
 services:
   local-network-monitor:
+    image: network-monitor:latest
     build: .
-    container_name: local-network-monitor-container
+    container_name: local-network-monitor
     ports:
       - "8050:8050"
     #environment:
