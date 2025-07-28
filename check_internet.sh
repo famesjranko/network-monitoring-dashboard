@@ -9,7 +9,6 @@ echo "setting check internet target ping IPs: ${TARGETS[*]}"
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 DB_FILE="$SCRIPT_DIR/logs/internet_status.db"
 FAILURE_COUNT_FILE="$SCRIPT_DIR/logs/failure_count.txt"
-#COOLDOWN_FILE="$SCRIPT_DIR/logs/cooldown.txt"
 
 now=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 SUCCESS_COUNT=0
@@ -114,7 +113,8 @@ if [[ $SUCCESS_PERCENTAGE -eq 0 ]]; then
     FAILURE_COUNT=$(cat $FAILURE_COUNT_FILE)
     echo "Failure count is: " $FAILURE_COUNT
 
-    if [[ $FAILURE_COUNT -ge 5 ]]; then
+    FAILURE_THRESHOLD=${FAILURE_THRESHOLD:-5}
+    if [[ $FAILURE_COUNT -ge $FAILURE_THRESHOLD ]]; then
         echo "Internet down for 5+ minutes. Power cycling modem..."
 
         python3 "$SCRIPT_DIR/power_cycle_nbn.py"
