@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   local-network-monitor:
     image: network-monitor:latest
