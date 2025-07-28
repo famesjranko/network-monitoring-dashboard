@@ -5,10 +5,17 @@ FROM python:3.8.18-slim
 WORKDIR /app
 
 # Install system dependencies: iputils-ping, sqlite3, redis-server, and supervisord
-RUN apt-get update &&     apt-get install -y iputils-ping sqlite3 redis-server supervisor &&     rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y \
+        iputils-ping \
+        sqlite3 \
+        redis-server \
+        supervisor && \
+    rm -rf /var/lib/apt/lists/*
 
 # Configure Redis to limit memory usage
-RUN echo "maxmemory 256mb" >> /etc/redis/redis.conf &&     echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
+RUN echo "maxmemory 256mb" >> /etc/redis/redis.conf && \
+    echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
 
 # Create the logs directory
 RUN mkdir -p logs
@@ -20,10 +27,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code into the container at /app
-COPY check_internet.sh .
-COPY internet_status_dashboard.py .
-COPY power_cycle_nbn.py .
-COPY power_cycle_nbn_override.py .
+COPY check_internet.sh \
+     internet_status_dashboard.py \
+     power_cycle_nbn.py \
+     power_cycle_nbn_override.py .
 
 # Make the check_internet.sh script executable
 RUN chmod +x check_internet.sh
@@ -31,7 +38,7 @@ RUN chmod +x check_internet.sh
 # Configure supervisord
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Make port 8050 available to the world outside this container
+# Expose port for the Dash app
 EXPOSE 8050
 
 # Start supervisord
