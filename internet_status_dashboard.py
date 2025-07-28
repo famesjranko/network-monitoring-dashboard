@@ -6,6 +6,7 @@ import subprocess
 import datetime
 import sqlite3
 from flask_caching import Cache
+from flask import jsonify
 import redis
 import os
 import sys
@@ -772,6 +773,11 @@ async def update_internet_status_live(n):
         'font-family': 'Arial, sans-serif',
         'minWidth': '220px' # Maintain consistent width
     }
+
+# Health-check endpoint
+@server.route("/health")
+def health_check():
+    return jsonify(status="ok"), 200
 
 if __name__ == '__main__':
     # Ensure Redis server is running and accessible
