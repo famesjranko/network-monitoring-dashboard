@@ -138,7 +138,7 @@ These variables can be set in your `docker-compose.yml` file to customize monito
 | `TAPO_DEVICE_NAME`       | **Optional.** Friendly display name for your smart plug device (used in logs and UI).        |
 | `TAPO_COOLDOWN_SECONDS`  | **Optional.** Cooldown (in seconds) between allowed modem reboots. Default: `3600` (1 hour). |
 
-> 💡 `INTERNET_CHECK_TARGETS` and `FAILURE_THRESHOLD` are used even if you're not using a Tapo plug.
+> 💡 `INTERNET_CHECK_TARGETS` is obviously used even if you're not using a Tapo plug.
 
 -----
 
