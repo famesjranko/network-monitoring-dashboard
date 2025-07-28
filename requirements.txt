@@ -1,5 +1,5 @@
-dash[async]
-flask-caching
-pandas
-redis
-tapo
+dash[async]==3.1.1
+flask-caching==2.3.1
+pandas==2.0.3
+redis==6.1.1
+tapo==0.8.1
