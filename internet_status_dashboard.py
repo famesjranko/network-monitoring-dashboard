@@ -27,6 +27,9 @@ DB_PATH = os.environ.get("DB_PATH", str(BASE_DIR / "logs" / "internet_status.db"
 # Redis URL (override with env if needed)
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
+# Timezone for display (keep storage/filtering in UTC)
+DISPLAY_TZ = os.environ.get("DISPLAY_TZ", "UTC")
+
 # ---------- Logging ----------
 
 logging.basicConfig(
@@ -55,6 +58,19 @@ cache = Cache(
 def _connect_ro(db_path: str) -> sqlite3.Connection:
     """Open SQLite in read-only mode to avoid journal creation from the web worker."""
     return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+
+# Safe TZ convert helper: keep UTC if conversion fails
+
+def _to_display_tz(ts: pd.Series) -> pd.Series:
+    """Convert a tz-aware pandas datetime Series (UTC) to DISPLAY_TZ for UI.
+    Falls back to UTC if zone data is missing/invalid.
+    """
+    try:
+        return ts.dt.tz_convert(DISPLAY_TZ)
+    except Exception as e:
+        # If zoneinfo data isn't present in the container, keep UTC and warn once
+        logger.warning(f"Could not apply DISPLAY_TZ='{DISPLAY_TZ}', keeping UTC: {e}")
+        return ts
 
 # --- Live internet status check for the badge ---
 async def check_live_internet_status_for_badge():
@@ -138,7 +154,7 @@ def parse_log(db_path: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def filter_data_by_date(log_data: pd.DataFrame, date_range: str) -> pd.DataFrame:
-    """Filter by preset ranges."""
+    """Filter by preset ranges (all math done in UTC)."""
     if log_data.empty:
         return log_data
 
@@ -159,17 +175,29 @@ def filter_data_by_date(log_data: pd.DataFrame, date_range: str) -> pd.DataFrame
 
 @cache.memoize(timeout=30)
 def get_filtered_data(db_path: str, date_range: str):
-    """Fetch + filter, memoized in Redis."""
+    """Fetch + filter in UTC, then convert timestamps to DISPLAY_TZ for UI, memoized in Redis."""
     try:
-        df = parse_log(db_path)
+        df = parse_log(db_path)                # df['timestamp'] is UTC
         if df.empty:
             logger.warning("Parsed DataFrame is empty.")
             return []
-        fdf = filter_data_by_date(df, date_range)
+        fdf = filter_data_by_date(df, date_range)  # filter in UTC
         if fdf.empty:
             logger.warning("Filtered DataFrame is empty after applying date range.")
             return []
-        cols = ["timestamp", "status_message", "success", "avg_latency_ms", "max_latency_ms", "min_latency_ms", "packet_loss"]
+
+        # Convert timestamps to display TZ for UI only
+        fdf["timestamp"] = _to_display_tz(fdf["timestamp"])  # safe convert
+
+        cols = [
+            "timestamp",
+            "status_message",
+            "success",
+            "avg_latency_ms",
+            "max_latency_ms",
+            "min_latency_ms",
+            "packet_loss",
+        ]
         logger.info(f"Returning filtered data with {len(fdf)} records.")
         return fdf[cols].to_dict("records")
     except Exception as e:
@@ -177,6 +205,8 @@ def get_filtered_data(db_path: str, date_range: str):
         # Fallback (non-memoized)
         df = parse_log(db_path)
         fdf = filter_data_by_date(df, date_range)
+        if not fdf.empty:
+            fdf["timestamp"] = _to_display_tz(fdf["timestamp"])  # safe convert
         return fdf.to_dict("records") if not fdf.empty else []
 
 def calculate_y_range(series: pd.Series, absolute_max: float, buffer_ratio: float = 0.1):
@@ -396,7 +426,7 @@ def update_dashboard(filtered_data, selected_latency_metrics):
     logger.info("Update Dashboard Callback:")
     logger.info(f"Number of records: {len(df)}")
     if not df.empty:
-        logger.info(f"Timestamp range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+        logger.info(f"Timestamp range (display TZ {DISPLAY_TZ}): {df['timestamp'].min()} to {df['timestamp'].max()}")
 
     # Read power cycle events (read-only)
     power_cycle_df = pd.DataFrame()
@@ -405,6 +435,7 @@ def update_dashboard(filtered_data, selected_latency_metrics):
             power_cycle_df = pd.read_sql_query("SELECT timestamp FROM power_cycle_events", conn)
         if not power_cycle_df.empty:
             power_cycle_df["timestamp"] = pd.to_datetime(power_cycle_df["timestamp"], format="mixed", utc=True)
+            power_cycle_df["timestamp"] = _to_display_tz(power_cycle_df["timestamp"])  # convert for UI
             logger.info(
                 f"Power cycle events: {power_cycle_df['timestamp'].min()} -> {power_cycle_df['timestamp'].max()} "
                 f"({len(power_cycle_df)} rows)"
@@ -418,7 +449,7 @@ def update_dashboard(filtered_data, selected_latency_metrics):
         # Return empty figs / counts
         return {}, {}, {}, [], "Fully Up: 0", "Partially Up: 0", "Down: 0"
 
-    # Sort by timestamp
+    # Sort by timestamp (already in display TZ)
     df.sort_values("timestamp", inplace=True)
 
     # Success graph
@@ -447,7 +478,7 @@ def update_dashboard(filtered_data, selected_latency_metrics):
             "title": "Internet Connectivity Over Time",
             "yaxis": {"title": "Ping Response Success Rate (%)", "range": [0, 100], "color": "#ffffff"},
             "xaxis": {
-                "title": "Timestamp",
+                "title": f"Timestamp ({DISPLAY_TZ})",
                 "color": "#ffffff",
                 "type": "date",
                 "tickformat": "%Y-%m-%d %H:%M:%S",
@@ -496,7 +527,7 @@ def update_dashboard(filtered_data, selected_latency_metrics):
                 "title": "Latency Over Time",
                 "yaxis": {"title": "Latency (ms)", "range": latency_y, "color": "#ffffff"},
                 "xaxis": {
-                    "title": "Timestamp",
+                    "title": f"Timestamp ({DISPLAY_TZ})",
                     "color": "#ffffff",
                     "type": "date",
                     "tickformat": "%Y-%m-%d %H:%M:%S",
@@ -517,7 +548,7 @@ def update_dashboard(filtered_data, selected_latency_metrics):
                 "title": "Latency Over Time",
                 "yaxis": {"title": "Latency (ms)", "range": [0, ABS_MAX_LAT], "color": "#ffffff"},
                 "xaxis": {
-                    "title": "Timestamp",
+                    "title": f"Timestamp ({DISPLAY_TZ})",
                     "color": "#ffffff",
                     "type": "date",
                     "tickformat": "%Y-%m-%d %H:%M:%S",
@@ -560,7 +591,7 @@ def update_dashboard(filtered_data, selected_latency_metrics):
             "title": "Packet Loss Over Time",
             "yaxis": {"title": "Packet Loss (%)", "range": [0, packetloss_y[1]], "color": "#ffffff"},
             "xaxis": {
-                "title": "Timestamp",
+                "title": f"Timestamp ({DISPLAY_TZ})",
                 "color": "#ffffff",
                 "type": "date",
                 "tickformat": "%Y-%m-%d %H:%M:%S",

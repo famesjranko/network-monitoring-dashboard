@@ -7,6 +7,7 @@ services:
     ports:
       - "8050:8050"
     environment:
+      - DISPLAY_TZ=Australia/Melbourne # where you are
       - DB_PATH=/app/logs/internet_status.db
       - RETENTION_DAYS=14
       - VACUUM_INTERVAL_RUNS=720   # ~12h if check runs every minute
