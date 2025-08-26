@@ -8,6 +8,8 @@ services:
       - "8050:8050"
     environment:
       - DB_PATH=/app/logs/internet_status.db
+      - RETENTION_DAYS=14
+      - VACUUM_INTERVAL_RUNS=720   # ~12h if check runs every minute
       # Comma-separated list of IPs to ping for internet connectivity checks
       # - Defaults to 8.8.8.8,1.1.1.1,9.9.9.9 if not set
       # - Example: 8.8.8.8,1.1.1.1
