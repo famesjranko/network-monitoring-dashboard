@@ -3,6 +3,7 @@ services:
     image: network-monitor:latest
     build: .
     container_name: local-network-monitor
+    restart: unless-stopped
     ports:
       - "8050:8050"
     #environment:
