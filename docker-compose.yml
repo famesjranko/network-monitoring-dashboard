@@ -3,9 +3,11 @@ services:
     image: network-monitor:latest
     build: .
     container_name: local-network-monitor
+    restart: unless-stopped
     ports:
       - "8050:8050"
-    #environment:
+    environment:
+      - DB_PATH=/app/logs/internet_status.db
       # Comma-separated list of IPs to ping for internet connectivity checks
       # - Defaults to 8.8.8.8,1.1.1.1,9.9.9.9 if not set
       # - Example: 8.8.8.8,1.1.1.1
@@ -15,7 +17,7 @@ services:
       # - TAPO_EMAIL=
       # - TAPO_PASSWORD=
       # - TAPO_DEVICE_IP=
-      # - TAPO_DEVICE_NAME=
+      # - TAPO_DEVICE_NAME=""
 
       # Cooldown period in seconds between allowed modem reboots (via smart plug)
       # Prevents repeated power cycles within a short period.
@@ -26,3 +28,5 @@ services:
       # - Default: 5
       # - Example: FAILURE_THRESHOLD=3
       # - FAILURE_THRESHOLD=5
+    volumes:
+      - ./logs:/app/logs
