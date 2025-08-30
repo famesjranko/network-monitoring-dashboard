@@ -6,30 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "8050:8050"
-    environment:
-      - DISPLAY_TZ=Australia/Melbourne # where you are
-      - DB_PATH=/app/logs/internet_status.db
-      - RETENTION_DAYS=14
-      - VACUUM_INTERVAL_RUNS=720   # ~12h if check runs every minute
-      # Comma-separated list of IPs to ping for internet connectivity checks
-      # - Defaults to 8.8.8.8,1.1.1.1,9.9.9.9 if not set
-      # - Example: 8.8.8.8,1.1.1.1
-      # - INTERNET_CHECK_TARGETS=8.8.8.8,1.1.1.1,9.9.9.9
-
-      # Tapo credentials and device details for controlling the smart plug
-      # - TAPO_EMAIL=
-      # - TAPO_PASSWORD=
-      # - TAPO_DEVICE_IP=
-      # - TAPO_DEVICE_NAME=""
-
-      # Cooldown period in seconds between allowed modem reboots (via smart plug)
-      # Prevents repeated power cycles within a short period.
-      # - Example: 3600 (1 hour)
-      # - TAPO_COOLDOWN_SECONDS=3600
-
-      # Number of consecutive failed checks before triggering power cycle
-      # - Default: 5
-      # - Example: FAILURE_THRESHOLD=3
-      # - FAILURE_THRESHOLD=5
+    env_file:
+      - .env
     volumes:
       - ./logs:/app/logs

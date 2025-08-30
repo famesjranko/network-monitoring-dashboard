@@ -55,6 +55,22 @@ cache = Cache(
 
 # ---------- Helpers ----------
 
+# Shared visual style for badge-like UI elements (status + button)
+BADGE_BASE_STYLE = {
+    "textAlign": "center",
+    "fontSize": "18px",
+    "fontWeight": "bold",
+    "fontFamily": "Arial, sans-serif",
+    "padding": "0 15px",
+    "borderRadius": "5px",
+    "minWidth": "220px",
+    "height": "40px",
+    "display": "inline-flex",
+    "alignItems": "center",
+    "justifyContent": "center",
+    "boxSizing": "border-box",
+}
+
 def _connect_ro(db_path: str) -> sqlite3.Connection:
     """Open SQLite in read-only mode to avoid journal creation from the web worker."""
     return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -256,54 +272,39 @@ app.layout = html.Div(
                 "backgroundColor": "#1e1e1e",
                 "borderRadius": "8px",
                 "marginBottom": "20px",
-                "font-family": "Arial, sans-serif",
+                "fontFamily": "Arial, sans-serif",
             },
         ),
         html.Div(
             [
                 html.Div(
                     id="internet-status",
-                    style={
-                        "textAlign": "center",
-                        "fontSize": "18px",
-                        "padding": "8px 15px",
-                        "borderRadius": "5px",
-                        "color": "#FFFFFF",
-                        "fontWeight": "bold",
-                    },
+                    className="badge status-badge",
+                    style={"color": "#FFFFFF"},
                 ),
-                html.Div([], style={"display": "flex", "alignItems": "center"}),
                 html.Div(
                     [
                         html.Button(
                             "Restart NBN",
                             id="power-cycle-button",
                             n_clicks=0,
-                            style={
-                                "backgroundColor": "#00ccff",
-                                "color": "#1e1e1e",
-                                "border": "none",
-                                "padding": "8px 15px",
-                                "border-radius": "5px",
-                                "font-size": "18px",
-                                "font-weight": "bold",
-                                "font-family": "Arial, sans-serif",
-                                "cursor": "pointer",
-                            },
+                            className="badge action-button",
+                            style={"cursor": "pointer"},
                         ),
-                        html.Div(id="power-cycle-status", style={"color": "#00ccff", "margin-top": "10px"}),
+                        html.Div(id="power-cycle-status", style={"color": "#00ccff", "marginTop": "10px"}),
                     ],
                     style={"display": "flex", "alignItems": "center"},
                 ),
             ],
+            className="toolbar",
             style={
                 "display": "flex",
                 "alignItems": "center",
                 "justifyContent": "space-between",
                 "backgroundColor": "#1e1e1e",
                 "padding": "10px 20px",
-                "border-radius": "8px",
-                "margin-bottom": "20px",
+                "borderRadius": "8px",
+                "marginBottom": "20px",
             },
         ),
         html.Div(
@@ -666,13 +667,6 @@ async def update_internet_status_live(n):
     return status_text, {
         "backgroundColor": bg_color,
         "color": "#FFFFFF" if bg_color == "#808080" else "#1e1e1e",
-        "textAlign": "center",
-        "fontSize": "18px",
-        "padding": "8px 15px",
-        "borderRadius": "5px",
-        "fontWeight": "bold",
-        "font-family": "Arial, sans-serif",
-        "minWidth": "220px",
     }
 
 # ---------- Healthcheck ----------

@@ -33,6 +33,9 @@ COPY check_internet.sh \
      power_cycle_nbn.py \
      power_cycle_nbn_override.py .
 
+# Copy Dash assets (CSS/JS)
+COPY assets/ ./assets/
+
 # Make the check_internet.sh script executable
 RUN chmod +x check_internet.sh
 
