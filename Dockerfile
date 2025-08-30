@@ -16,7 +16,10 @@ RUN apt-get update && \
 
 # Configure Redis to limit memory usage
 RUN echo "maxmemory 256mb" >> /etc/redis/redis.conf && \
-    echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
+    echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf && \
+    # Disable persistence (cache-only use): avoid bgsave/AOF forks
+    echo "save \"\"" >> /etc/redis/redis.conf && \
+    echo "appendonly no" >> /etc/redis/redis.conf
 
 # Create the logs directory
 RUN mkdir -p logs
