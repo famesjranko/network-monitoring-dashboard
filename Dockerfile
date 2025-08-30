@@ -16,7 +16,10 @@ RUN apt-get update && \
 
 # Configure Redis to limit memory usage
 RUN echo "maxmemory 256mb" >> /etc/redis/redis.conf && \
-    echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
+    echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf && \
+    # Disable persistence (cache-only use): avoid bgsave/AOF forks
+    echo "save \"\"" >> /etc/redis/redis.conf && \
+    echo "appendonly no" >> /etc/redis/redis.conf
 
 # Create the logs directory
 RUN mkdir -p logs
@@ -32,6 +35,9 @@ COPY check_internet.sh \
      internet_status_dashboard.py \
      power_cycle_nbn.py \
      power_cycle_nbn_override.py .
+
+# Copy Dash assets (CSS/JS)
+COPY assets/ ./assets/
 
 # Make the check_internet.sh script executable
 RUN chmod +x check_internet.sh
