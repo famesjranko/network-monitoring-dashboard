@@ -1,4 +1,6 @@
 import os
+import time
+import subprocess
 import re
 import sys
 import sqlite3
@@ -18,12 +20,15 @@ from tapo import ApiClient
 
 # ---------- Logging ----------
 
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+_level = getattr(logging, LOG_LEVEL, logging.INFO)
 logging.basicConfig(
-    level=logging.INFO,
+    level=_level,
     format="%(asctime)s - %(levelname)s - %(message)s",
     stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
+logger.info(f"Log level set to {logging.getLevelName(_level)}")
 
 # ---------- Paths & config ----------
 
@@ -133,7 +138,7 @@ async def check_live_internet_status_for_badge():
             )
             stdout, stderr = await process.communicate()
             ping_output = stdout.decode().strip()
-            logger.info(f"Internet status badge, ping output:{ping_output}")
+            logger.debug(f"Internet status badge, ping output: {ping_output}")
 
             if process.returncode == 0:
                 # e.g. "1 packets transmitted, 1 received, 0% packet loss"
@@ -267,9 +272,8 @@ async def check_tapo_connection():
     password = os.environ.get("TAPO_PASSWORD")
     device_ip = os.environ.get("TAPO_DEVICE_IP")
 
-    logger.info(
-        f"Tapo credentials read: Email={email}, Password={'*' * len(password) if password else 'None'}, IP={device_ip}"
-    )
+    # Avoid logging credentials; only log at debug level if needed
+    logger.debug("Tapo connectivity check invoked")
 
     if not all([email, password, device_ip]):
         logger.warning("Tapo credentials (email, password, or IP) are not set as environment variables.")
@@ -279,10 +283,11 @@ async def check_tapo_connection():
         client = ApiClient(email, password)
         device = await client.p100(device_ip)
         await device.refresh_session()
-        logger.info(f"Successfully connected to Tapo device: {device_ip}")
+        logger.debug("Tapo device connected")
         return True, "Tapo device connected."
     except Exception as e:
-        logger.error(f"Failed to connect to Tapo device at {device_ip}: {e}")
+        # Log a concise warning without credentials
+        logger.warning(f"Tapo connectivity failed: {e}")
         return False, f"Failed to connect to Tapo device: {e}"
 
 # ---------- Layout ----------
@@ -315,7 +320,6 @@ app.layout = html.Div(
                             className="badge action-button",
                             style={"cursor": "pointer"},
                         ),
-                        html.Div(id="power-cycle-status", style={"color": "#00ccff", "marginTop": "10px"}),
                     ],
                     style={"display": "flex", "alignItems": "center"},
                 ),
@@ -353,6 +357,7 @@ app.layout = html.Div(
         ),
         dcc.Store(id="filtered-data"),
         dcc.Store(id="button-state-store"),
+        dcc.Store(id="power-cycle-start"),
         dcc.Store(id="tapo-connection-status"),
         dcc.Store(id="is-compact"),
         html.Div(
@@ -452,9 +457,12 @@ async def update_tapo_status(n):
 
 @app.callback(
     Output("filtered-data", "data"),
-    [Input("interval-component", "n_intervals"), Input("date-range-dropdown", "value")],
+    [
+        Input("interval-component", "n_intervals"),
+        Input("date-range-dropdown", "value"),
+    ],
 )
-def fetch_data(n, date_range):
+def fetch_data(n_minute, date_range):
     # Use the single source of truth for DB path
     filtered = get_filtered_data(DB_PATH, date_range)
     return filtered
@@ -474,8 +482,8 @@ def fetch_data(n, date_range):
 def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
     df = pd.DataFrame(filtered_data)
 
-    logger.info("Update Dashboard Callback:")
-    logger.info(f"Number of records: {len(df)}")
+    logger.debug("Update Dashboard Callback")
+    logger.debug(f"Number of records: {len(df)}")
     if not df.empty:
         logger.info(f"Timestamp range (display TZ {DISPLAY_TZ}): {df['timestamp'].min()} to {df['timestamp'].max()}")
 
@@ -487,12 +495,12 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
         if not power_cycle_df.empty:
             power_cycle_df["timestamp"] = pd.to_datetime(power_cycle_df["timestamp"], format="mixed", utc=True)
             power_cycle_df["timestamp"] = _to_display_tz(power_cycle_df["timestamp"])  # convert for UI
-            logger.info(
+            logger.debug(
                 f"Power cycle events: {power_cycle_df['timestamp'].min()} -> {power_cycle_df['timestamp'].max()} "
                 f"({len(power_cycle_df)} rows)"
             )
         else:
-            logger.warning("No power cycle events found in the database.")
+            logger.debug("No power cycle events found in the database.")
     except Exception as e:
         logger.error(f"Failed to fetch power cycle events: {e}")
 
@@ -709,11 +717,41 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
 
 @app.callback(
     Output("button-state-store", "data"),
+    Output("power-cycle-start", "data"),
     Input("power-cycle-button", "n_clicks"),
+    Input("internet-interval", "n_intervals"),
+    State("button-state-store", "data"),
+    State("power-cycle-start", "data"),
     prevent_initial_call=True,
 )
-def update_button_state(n_clicks):
-    return "processing" if (n_clicks or 0) > 0 else "idle"
+def on_power_cycle(n_clicks, n_fast, state, started_at):
+    ctx = dash.callback_context
+    try:
+        if ctx.triggered:
+            source = ctx.triggered[0]["prop_id"].split(".")[0]
+        else:
+            source = None
+    except Exception:
+        source = None
+
+    if source == "power-cycle-button" and (n_clicks or 0) > 0:
+        # Start the override script asynchronously and mark processing
+        try:
+            script_path = str(BASE_DIR / "scripts" / "power_cycle_nbn_override.py")
+            subprocess.Popen(["python3", script_path])
+            return "processing", int(time.time())
+        except Exception as e:
+            logger.error(f"Failed to trigger manual power cycle: {e}")
+            return state or "idle", started_at
+
+    # Auto-reset after ~40s
+    try:
+        if state == "processing" and started_at and (int(time.time()) - int(started_at) >= 40):
+            return "idle", started_at
+    except Exception:
+        pass
+
+    return dash.no_update, dash.no_update
 
 @app.callback(
     Output("power-cycle-button", "style"),
@@ -733,22 +771,7 @@ def update_button_style(state, tapo_status, current_style):
     else:
         return {**current_style, "backgroundColor": "#00ccff", "cursor": "pointer"}, False, "Restart NBN"
 
-@app.callback(
-    Output("power-cycle-status", "children"),
-    Output("button-state-store", "data", allow_duplicate=True),
-    Input("power-cycle-button", "n_clicks"),
-    prevent_initial_call=True,
-)
-def trigger_power_cycle(n_clicks):
-    if (n_clicks or 0) > 0:
-        logger.info("Pressed restart NBN button")
-        try:
-            script_path = str(BASE_DIR / "power_cycle_nbn_override.py")
-            _ = asyncio.run(asyncio.to_thread(os.system, f"python3 {script_path}"))
-            return "", "idle"
-        except Exception:
-            return "", "idle"
-    return "", "idle"
+## merged power-cycle trigger + reset into on_power_cycle callback above
 
 @app.callback(
     Output("internet-status", "children"),
@@ -757,6 +780,7 @@ def trigger_power_cycle(n_clicks):
 )
 async def update_internet_status_live(n):
     status_text, bg_color = await check_live_internet_status_for_badge()
+    logger.debug(f"Badge status: {status_text} color={bg_color}")
     return status_text, {
         "backgroundColor": bg_color,
         "color": "#FFFFFF" if bg_color == "#808080" else "#1e1e1e",
@@ -764,7 +788,7 @@ async def update_internet_status_live(n):
 
 # ---------- Client-side callbacks ----------
 
-# Track viewport width on a 5s cadence using the existing internet interval.
+# Track viewport width on a fast cadence using the existing internet interval.
 # This avoids server overhead and lets us conditionally compact graph layouts on small screens.
 app.clientside_callback(
     """

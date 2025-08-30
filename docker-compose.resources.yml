@@ -1,0 +1,12 @@
+services:
+  local-network-monitor:
+    # Works in docker compose v2 (non-swarm)
+    mem_limit: 512m
+    cpus: "0.50"
+    # Swarm-style (ignored by plain compose, but useful if deploying to swarm)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+

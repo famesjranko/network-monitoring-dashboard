@@ -1,6 +1,6 @@
 services:
   local-network-monitor:
-    image: network-monitor:latest
+    image: network-monitor:0.1.0
     build: .
     container_name: local-network-monitor
     restart: unless-stopped
