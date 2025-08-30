@@ -632,7 +632,9 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
 
     # Packet loss
     ABS_MAX_LOSS = 100
+    MIN_LOSS_Y_MAX = 25  # ensure some headroom when values are near 0
     packetloss_y = calculate_y_range(df["packet_loss"], ABS_MAX_LOSS)
+    loss_y_max = max(MIN_LOSS_Y_MAX, packetloss_y[1])
     packetloss_fig = {
         "data": [
             {
@@ -649,7 +651,7 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
             "title": "Packet Loss Over Time",
             "yaxis": {
                 "title": "Packet Loss (%)",
-                "range": [0, packetloss_y[1]],
+                "range": [0, loss_y_max],
                 "color": "#ffffff",
                 "automargin": True,
                 "tickfont": {"size": 12 if not is_compact else 10},
