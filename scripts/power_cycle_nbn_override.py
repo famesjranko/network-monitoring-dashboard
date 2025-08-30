@@ -8,6 +8,9 @@ import sys
 from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(sys.argv[0])) 
+LOG_DIR = os.environ.get("LOG_DIR", os.path.join(SCRIPT_DIR, "../", "logs"))
+os.makedirs(LOG_DIR, exist_ok=True)
+DB_PATH = os.environ.get("DB_PATH", os.path.join(SCRIPT_DIR, "../", 'data', 'internet_status.db'))
 
 # Set up logging configuration
 logging.basicConfig(
@@ -29,8 +32,8 @@ retry_attempts = 3  # Number of retries if a connection fails
 # Log power cycle event to SQLite database
 def log_power_cycle_event(reason="Internet down for 5+ minutes"):
     try:
-        db_file = os.path.join(SCRIPT_DIR, 'logs/internet_status.db')
-        conn = sqlite3.connect(db_file)
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         timestamp_str = datetime.utcnow().isoformat(timespec='seconds') + 'Z'
         logging.info(f"DEBUG: Timestamp for power_cycle_events DB insert: {timestamp_str}")

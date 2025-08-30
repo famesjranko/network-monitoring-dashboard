@@ -16,20 +16,6 @@ from flask import jsonify
 from flask_caching import Cache
 from tapo import ApiClient
 
-# ---------- Paths & config ----------
-
-# Directory of THIS file (works under gunicorn)
-BASE_DIR = Path(__file__).resolve().parent
-
-# Single source of truth for DB path (override with env if you like)
-DB_PATH = os.environ.get("DB_PATH", str(BASE_DIR / "logs" / "internet_status.db"))
-
-# Redis URL (override with env if needed)
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-
-# Timezone for display (keep storage/filtering in UTC)
-DISPLAY_TZ = os.environ.get("DISPLAY_TZ", "UTC")
-
 # ---------- Logging ----------
 
 logging.basicConfig(
@@ -38,6 +24,31 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
+
+# ---------- Paths & config ----------
+
+# Directory of THIS file (works under gunicorn)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Single source of truth for DB path (override with env if you like)
+DB_PATH = os.environ.get("DB_PATH", str(BASE_DIR / "data" / "internet_status.db"))
+
+# Redis URL (override with env if needed)
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+# Timezone for display (keep storage/filtering in UTC)
+DISPLAY_TZ = os.environ.get("DISPLAY_TZ", "UTC")
+
+# Log effective config
+try:
+    db_exists = Path(DB_PATH).exists()
+    db_size = Path(DB_PATH).stat().st_size if db_exists else 0
+    logger.info(
+        f"Config: DB_PATH={DB_PATH} (exists={db_exists}, size={db_size} bytes), "
+        f"REDIS_URL={REDIS_URL}, DISPLAY_TZ={DISPLAY_TZ}"
+    )
+except Exception:
+    logger.info(f"Config: DB_PATH={DB_PATH}, REDIS_URL={REDIS_URL}, DISPLAY_TZ={DISPLAY_TZ}")
 
 # ---------- Dash app ----------
 
@@ -72,8 +83,10 @@ BADGE_BASE_STYLE = {
 }
 
 def _connect_ro(db_path: str) -> sqlite3.Connection:
-    """Open SQLite in read-only mode to avoid journal creation from the web worker."""
-    return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    """Open SQLite for reading. Use a normal connection to allow SQLite to
+    create/access WAL/SHM files, avoiding 'readonly database' errors during WAL.
+    """
+    return sqlite3.connect(db_path)
 
 # Safe TZ convert helper: keep UTC if conversion fails
 
@@ -763,6 +776,28 @@ app.clientside_callback(
 @server.route("/health")
 def health_check():
     return jsonify(status="ok"), 200
+
+@server.route("/debug/db")
+def debug_db():
+    info = {"db_path": DB_PATH}
+    try:
+        p = Path(DB_PATH)
+        info.update(
+            exists=p.exists(), size=p.stat().st_size if p.exists() else 0,
+            mtime=p.stat().st_mtime if p.exists() else None,
+        )
+    except Exception as e:
+        info["stat_error"] = str(e)
+    try:
+        with _connect_ro(DB_PATH) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM internet_status")
+            info["internet_status_rows"] = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM power_cycle_events")
+            info["power_cycle_events_rows"] = cur.fetchone()[0]
+    except Exception as e:
+        info["query_error"] = str(e)
+    return jsonify(info), 200
 
 # ---------- Dev runner (unused under gunicorn) ----------
 

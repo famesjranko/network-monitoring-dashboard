@@ -1,12 +1,35 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: local-network-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis-data:/data
+
   local-network-monitor:
     image: network-monitor:latest
     build: .
     container_name: local-network-monitor
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     ports:
       - "8050:8050"
     env_file:
       - .env
+    environment:
+      DB_PATH: /app/data/internet_status.db
+      LOG_DIR: /app/logs
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./logs:/app/logs
+      - ./data:/app/data
+
+volumes:
+  redis-data:

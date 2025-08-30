@@ -9,10 +9,10 @@
 - `screenshots/`: UI snapshots used in docs.
 
 ## Build, Test, and Development Commands
-- Build & run container: `docker-compose up --build -d` — starts Redis, checker, and Gunicorn/Dash on `:8050`.
+- Build & run container: `docker-compose up --build -d` — starts Redis (separate service), checker, and Gunicorn/Dash on `:8050`.
 - View logs: `docker-compose logs -f local-network-monitor` — tail combined process logs.
 - Stop services: `docker-compose down` — stops and removes the container.
-- Local dev (no Docker): `pip install -r requirements.txt`; run Redis separately; start UI with `python3 internet_status_dashboard.py`; run a sample check with `bash check_internet.sh` to populate the DB.
+- Local dev (no Docker): `pip install -r requirements.txt`; run Redis separately; start UI with `python3 internet_status_dashboard.py`; run a sample check with `bash scripts/check_internet.sh` to populate the DB.
 
 ## Coding Style & Naming Conventions
 - Python: PEP 8, 4‑space indent, snake_case for functions/vars; constants and env keys in UPPER_SNAKE.
@@ -34,4 +34,3 @@
 - Secrets: do not commit credentials. Prefer `.env` with `docker-compose` (`env_file: .env`) and git‑ignore it.
 - Volumes: mount `./logs:/app/logs` to persist the SQLite DB across restarts.
 - Env keys: `INTERNET_CHECK_TARGETS`, `FAILURE_THRESHOLD`, `DISPLAY_TZ`, Tapo credentials; document changes in PRs.
-

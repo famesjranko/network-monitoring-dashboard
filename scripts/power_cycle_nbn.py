@@ -22,9 +22,12 @@ password = os.environ.get("TAPO_PASSWORD")
 device_ip = os.environ.get("TAPO_DEVICE_IP")
 device_name = os.environ.get("TAPO_DEVICE_NAME")
 
-# Cooldown settings
-COOLDOWN_FILE=os.path.join(SCRIPT_DIR, 'logs/cooldown.txt')
-COOLDOWN_PERIOD = int(os.environ.get("TAPO_COOLDOWN_SECONDS", 3600))  # 1 hr cooldown in seconds (3600 seconds = 1 hr)
+# Cooldown settings and DB path
+LOG_DIR = os.environ.get("LOG_DIR", os.path.join(SCRIPT_DIR, "../", "logs"))
+os.makedirs(LOG_DIR, exist_ok=True)
+COOLDOWN_FILE = os.path.join(LOG_DIR, 'cooldown.txt')
+COOLDOWN_PERIOD = int(os.environ.get("TAPO_COOLDOWN_SECONDS", 3600))  # seconds
+DB_PATH = os.environ.get("DB_PATH", os.path.join(SCRIPT_DIR, "../", 'data', 'internet_status.db'))
 
 # The time to wait between turning off and on the device (in seconds)
 wait_time = 30  # You can change this to any number of seconds
@@ -33,8 +36,8 @@ retry_attempts = 3  # Number of retries if a connection fails
 # Log power cycle event to SQLite database
 def log_power_cycle_event(reason="Internet down for 5+ minutes"):
     try:
-        db_file = os.path.join(SCRIPT_DIR, 'logs/internet_status.db')
-        conn = sqlite3.connect(db_file)
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         timestamp_str = datetime.utcnow().isoformat(timespec='seconds') + 'Z'
         logging.info(f"DEBUG: Timestamp for power_cycle_events DB insert: {timestamp_str}")
