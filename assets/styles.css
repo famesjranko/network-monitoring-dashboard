@@ -59,3 +59,63 @@
     display: none;
   }
 }
+
+/* Generic section container */
+.section {
+  background-color: #121212;
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+/* Graph sizing */
+.viz-graph {
+  height: 440px;
+}
+@media (max-width: 600px) {
+  .viz-graph {
+    height: 320px;
+    margin: 4px 0; /* tighter spacing on mobile */
+  }
+}
+
+/* Stats row */
+.stats-row {
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.stats-row .stat {
+  flex: 1 1 30%;
+  min-width: 140px;
+  text-align: center;
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .stats-row .stat {
+    flex: 1 1 100%;
+  }
+}
+
+/* Controls */
+.control {
+  width: 100%;
+}
+@media (max-width: 600px) {
+  #latency-metrics-checkbox label {
+    display: inline-block;
+    margin-right: 8px;
+  }
+}
+
+/* Data table tweaks on small screens */
+@media (max-width: 600px) {
+  #log-table {
+    font-size: 12px;
+  }
+  .section {
+    padding: 8px;
+    margin-top: 6px;
+  }
+}

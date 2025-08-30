@@ -321,29 +321,38 @@ app.layout = html.Div(
                     ],
                     value="last_12_hours",
                     clearable=False,
-                    style={"backgroundColor": "#121212", "color": "#00ccff"},
+                    style={"backgroundColor": "#121212", "color": "#00ccff", "width": "100%"},
                     className="dropdown",
                 ),
             ],
-            style={"backgroundColor": "#121212", "padding": "10px", "border-radius": "8px"},
+            className="section",
         ),
         dcc.Store(id="filtered-data"),
         dcc.Store(id="button-state-store"),
         dcc.Store(id="tapo-connection-status"),
+        dcc.Store(id="is-compact"),
         html.Div(
             [
                 html.Div(
                     [
-                        html.H4(id="full-up-count", style={"color": "#00ccff"}),
-                        html.H4(id="partial-up-count", style={"color": "#ffcc00"}),
-                        html.H4(id="down-count", style={"color": "#ff6666"}),
+                        html.H4(id="full-up-count", className="stat", style={"color": "#00ccff"}),
+                        html.H4(id="partial-up-count", className="stat", style={"color": "#ffcc00"}),
+                        html.H4(id="down-count", className="stat", style={"color": "#ff6666"}),
                     ],
-                    style={"display": "flex", "justify-content": "space-around", "color": "#ffffff"},
+                    className="stats-row",
                 )
             ],
-            style={"backgroundColor": "#1e1e1e", "padding": "10px", "border-radius": "8px", "margin-top": "10px"},
+            style={"backgroundColor": "#1e1e1e", "padding": "10px", "borderRadius": "8px", "marginTop": "10px"},
         ),
-        dcc.Loading(dcc.Graph(id="success-graph"), type="default"),
+        dcc.Loading(
+            dcc.Graph(
+                id="success-graph",
+                className="viz-graph",
+                config={"responsive": True},
+                style={"height": "440px", "width": "100%"},
+            ),
+            type="default",
+        ),
         html.Div(
             [
                 dcc.Checklist(
@@ -354,15 +363,31 @@ app.layout = html.Div(
                         {"label": "Minimum Latency (ms)", "value": "min_latency_ms"},
                     ],
                     value=["avg_latency_ms", "max_latency_ms", "min_latency_ms"],
-                    labelStyle={"display": "inline-block", "margin-right": "10px", "color": "#ffffff"},
-                    inputStyle={"margin-right": "5px"},
+                    labelStyle={"display": "inline-block", "marginRight": "10px", "color": "#ffffff"},
+                    inputStyle={"marginRight": "5px"},
                 )
             ],
-            style={"backgroundColor": "#121212", "padding": "10px", "border-radius": "8px", "margin-top": "10px"},
+            className="section",
         ),
-        dcc.Loading(dcc.Graph(id="latency-graph"), type="default"),
-        html.Div([], style={"backgroundColor": "#121212", "padding": "10px", "border-radius": "8px", "margin-top": "10px"}),
-        dcc.Loading(dcc.Graph(id="packetloss-graph"), type="default"),
+        dcc.Loading(
+            dcc.Graph(
+                id="latency-graph",
+                className="viz-graph",
+                config={"responsive": True},
+                style={"height": "440px", "width": "100%"},
+            ),
+            type="default",
+        ),
+        html.Div([], className="section"),
+        dcc.Loading(
+            dcc.Graph(
+                id="packetloss-graph",
+                className="viz-graph",
+                config={"responsive": True},
+                style={"height": "440px", "width": "100%"},
+            ),
+            type="default",
+        ),
         html.Div(
             [
                 html.H4("Detailed Log Entries", style={"color": "#ffffff"}),
@@ -385,10 +410,11 @@ app.layout = html.Div(
                     type="default",
                 ),
             ],
-            style={"margin-top": "20px", "backgroundColor": "#1e1e1e", "padding": "10px", "border-radius": "8px"},
+            style={"marginTop": "20px", "backgroundColor": "#1e1e1e", "padding": "10px", "borderRadius": "8px"},
         ),
         dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # refresh every minute
-        dcc.Interval(id="internet-interval", interval=5 * 1000, n_intervals=0),   # badge every 5s
+        dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # status badge every 2s
+        # Use internet-interval (2s) only to refresh compact flag when threshold crossed
     ],
     style={"backgroundColor": "#121212", "padding": "20px"},
 )
@@ -419,9 +445,9 @@ def fetch_data(n, date_range):
         Output("partial-up-count", "children"),
         Output("down-count", "children"),
     ],
-    [Input("filtered-data", "data"), Input("latency-metrics-checkbox", "value")],
+    [Input("filtered-data", "data"), Input("latency-metrics-checkbox", "value"), Input("is-compact", "data")],
 )
-def update_dashboard(filtered_data, selected_latency_metrics):
+def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
     df = pd.DataFrame(filtered_data)
 
     logger.info("Update Dashboard Callback:")
@@ -453,6 +479,9 @@ def update_dashboard(filtered_data, selected_latency_metrics):
     # Sort by timestamp (already in display TZ)
     df.sort_values("timestamp", inplace=True)
 
+    # Determine compact mode based on viewport width
+    is_compact = bool(is_compact) if is_compact is not None else False
+
     # Success graph
     success_fig = {
         "data": [
@@ -477,20 +506,34 @@ def update_dashboard(filtered_data, selected_latency_metrics):
         ],
         "layout": {
             "title": "Internet Connectivity Over Time",
-            "yaxis": {"title": "Ping Response Success Rate (%)", "range": [0, 100], "color": "#ffffff"},
+            "yaxis": {
+                "title": "Ping Response Success Rate (%)",
+                "range": [0, 100],
+                "color": "#ffffff",
+                "automargin": True,
+                "tickfont": {"size": 12 if not is_compact else 10},
+            },
             "xaxis": {
                 "title": f"Timestamp ({DISPLAY_TZ})",
                 "color": "#ffffff",
                 "type": "date",
                 "tickformat": "%Y-%m-%d %H:%M:%S",
                 "range": [df["timestamp"].min(), df["timestamp"].max()],
+                "automargin": True,
+                "tickangle": -45 if is_compact else 0,
+                "tickfont": {"size": 12 if not is_compact else 10},
             },
             "plot_bgcolor": "#1e1e1e",
             "paper_bgcolor": "#1e1e1e",
             "font": {"color": "#ffffff"},
             "titlefont": {"color": "#00ccff"},
-            "legend": {"orientation": "h", "x": 0, "y": -0.2},
+            "legend": (
+                {"orientation": "h", "x": 0, "y": 1.02, "font": {"size": 11}}
+                if is_compact
+                else {"orientation": "h", "x": 0, "y": -0.2}
+            ),
             "hovermode": "closest",
+            "margin": ({"l": 16, "r": 16, "t": 44, "b": 44} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
         },
     }
 
@@ -526,20 +569,34 @@ def update_dashboard(filtered_data, selected_latency_metrics):
             "data": latency_traces,
             "layout": {
                 "title": "Latency Over Time",
-                "yaxis": {"title": "Latency (ms)", "range": latency_y, "color": "#ffffff"},
+                "yaxis": {
+                    "title": "Latency (ms)",
+                    "range": latency_y,
+                    "color": "#ffffff",
+                    "automargin": True,
+                    "tickfont": {"size": 12 if not is_compact else 10},
+                },
                 "xaxis": {
                     "title": f"Timestamp ({DISPLAY_TZ})",
                     "color": "#ffffff",
                     "type": "date",
                     "tickformat": "%Y-%m-%d %H:%M:%S",
                     "range": [df["timestamp"].min(), df["timestamp"].max()],
+                    "automargin": True,
+                    "tickangle": -45 if is_compact else 0,
+                    "tickfont": {"size": 12 if not is_compact else 10},
                 },
                 "plot_bgcolor": "#1e1e1e",
                 "paper_bgcolor": "#1e1e1e",
                 "font": {"color": "#ffffff"},
                 "titlefont": {"color": "#ffcc00"},
-                "legend": {"orientation": "h", "x": 0, "y": -0.2},
+                "legend": (
+                    {"orientation": "h", "x": 0, "y": 1.02, "font": {"size": 11}}
+                    if is_compact
+                    else {"orientation": "h", "x": 0, "y": -0.2}
+                ),
                 "hovermode": "closest",
+                "margin": ({"l": 16, "r": 16, "t": 44, "b": 44} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
             },
         }
     else:
@@ -590,19 +647,29 @@ def update_dashboard(filtered_data, selected_latency_metrics):
         ],
         "layout": {
             "title": "Packet Loss Over Time",
-            "yaxis": {"title": "Packet Loss (%)", "range": [0, packetloss_y[1]], "color": "#ffffff"},
+            "yaxis": {
+                "title": "Packet Loss (%)",
+                "range": [0, packetloss_y[1]],
+                "color": "#ffffff",
+                "automargin": True,
+                "tickfont": {"size": 12 if not is_compact else 10},
+            },
             "xaxis": {
                 "title": f"Timestamp ({DISPLAY_TZ})",
                 "color": "#ffffff",
                 "type": "date",
                 "tickformat": "%Y-%m-%d %H:%M:%S",
                 "range": [df["timestamp"].min(), df["timestamp"].max()],
+                "automargin": True,
+                "tickangle": -45 if is_compact else 0,
+                "tickfont": {"size": 12 if not is_compact else 10},
             },
             "plot_bgcolor": "#1e1e1e",
             "paper_bgcolor": "#1e1e1e",
             "font": {"color": "#ffffff"},
             "titlefont": {"color": "#ff0000"},
             "hovermode": "closest",
+            "margin": ({"l": 16, "r": 16, "t": 44, "b": 44} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
         },
     }
 
@@ -668,6 +735,26 @@ async def update_internet_status_live(n):
         "backgroundColor": bg_color,
         "color": "#FFFFFF" if bg_color == "#808080" else "#1e1e1e",
     }
+
+# ---------- Client-side callbacks ----------
+
+# Track viewport width on a 5s cadence using the existing internet interval.
+# This avoids server overhead and lets us conditionally compact graph layouts on small screens.
+app.clientside_callback(
+    """
+    function(n, prev) {
+        try {
+            var w = window.innerWidth || 1200;
+            var compact = w < 700;
+            if (prev === compact) { return window.dash_clientside.no_update; }
+            return compact;
+        } catch(e) { return prev || false; }
+    }
+    """,
+    Output("is-compact", "data"),
+    Input("internet-interval", "n_intervals"),
+    State("is-compact", "data"),
+)
 
 # ---------- Healthcheck ----------
 
