@@ -1,3 +1,4 @@
 logs/
 .env
 AGENTS.md
+data/

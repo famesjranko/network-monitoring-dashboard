@@ -1,6 +1,6 @@
 # Containerized Internet Monitor with Dash & Tapo Power Cycling
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/) [![Docker](https://img.shields.io/badge/Container-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Dash](https://img.shields.io/badge/Framework-Plotly%20Dash-3DD1F2)](https://dash.plotly.com/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/) [![Docker](https://img.shields.io/badge/Container-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![Dash](https://img.shields.io/badge/Framework-Plotly%20Dash-3DD1F2)](https://dash.plotly.com/)
 
 This project provides a self-contained, easy-to-deploy solution for monitoring your internet connectivity. It periodically pings external targets, logs the results to an SQLite database, and visualizes the data on a web dashboard.
 
@@ -49,7 +49,7 @@ cp .env.example .env
 # then open .env and set values as needed
 ```
 
-The included `docker-compose.yml` already wires everything up using `.env` and persists the SQLite database via a volume:
+The included `docker-compose.yml` wires everything up using `.env` and persists both logs and the SQLite database via volumes. Redis is optional.
 
 ```yaml
 services:
@@ -64,6 +64,8 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs
+      - ./data:/app/data
+
 ```
 
 Notes:
@@ -93,21 +95,21 @@ http://localhost:8050
 
 ## 🏗️ System Architecture
 
-This project runs within a single, all-in-one Docker container.
+This project runs the application container managed by Docker Compose.
 
-The `Dockerfile` builds an image based on Python 3.8.18-slim and installs all necessary components: `ping`, `sqlite3`, the `redis-server`, `supervisor`, and tooling required for health checks.
-
-Inside the container, `supervisord` is responsible for running and managing three key processes simultaneously:
-
-1. Redis Server: A local Redis instance for caching dashboard data.
-2. Monitoring Script (`check_internet.sh`): A shell script that runs every minute to ping targets and log results.
-3. Dash Web App (`internet_status_dashboard.py`): A Gunicorn server that hosts the Python web application.
-
-This single-container approach simplifies deployment and management.
+Inside the application container, `supervisord` manages two processes:
+1) Monitoring script (`scripts/check_internet.sh`) running every minute.
+2) Dash web app (`internet_status_dashboard.py`) served via Gunicorn on port 8050.
 
 Additional details:
 - Health endpoint: the app exposes `GET /health`; the Docker image defines a `HEALTHCHECK` against it.
-- Redis is configured as a cache-only local instance (no persistence) for dashboard responsiveness.
+- Caching: Redis is optional. If `REDIS_URL` is set, the app uses Redis; otherwise it uses an in-process SimpleCache.
+
+To enable Redis, use the override file and set `REDIS_URL`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.redis.yml up -d
+```
 
 -----
 
@@ -122,8 +124,9 @@ Set these in `.env` (the compose file uses `env_file: .env`). Tapo-related varia
 | `INTERNET_CHECK_TARGETS`   | `8.8.8.8,1.1.1.1,9.9.9.9`                  | Comma-separated list of IPs to ping; used for badge and logging. |
 | `FAILURE_THRESHOLD`        | `5`                                        | Consecutive failed minutes before automatic power cycle. |
 | `DISPLAY_TZ`               | `UTC`                                      | Timezone for displaying timestamps in the UI. |
-| `DB_PATH`                  | `logs/internet_status.db`                  | Path to SQLite DB inside the container. |
-| `REDIS_URL`                | `redis://localhost:6379/0`                 | Redis connection URL for caching (local in-container Redis). |
+| `DB_PATH`                  | `/app/data/internet_status.db`             | Path to SQLite DB inside the container. |
+| `LOG_DIR`                  | `/app/logs`                                | Directory for runtime logs and counters. |
+| `REDIS_URL`                | — (unset)                                   | Optional. If set, enables Redis caching. Example: `redis://redis:6379/0`. |
 | `PING_COUNT_PER_TARGET`    | `5`                                        | Number of pings per target per minute in the checker. |
 | `PING_TIMEOUT`             | `2`                                        | Ping timeout (seconds) per probe. |
 | `RETENTION_DAYS`           | `14`                                       | Days of history to keep in SQLite; older rows are pruned. |
@@ -144,8 +147,9 @@ Copy `.env.example` to `.env` and set keys as needed. Common entries:
 - INTERNET_CHECK_TARGETS: Comma-separated IPs to ping (e.g., `1.1.1.1,8.8.8.8`).
 - FAILURE_THRESHOLD: Minutes of full failure before auto power cycle (default `5`).
 - DISPLAY_TZ: UI timezone (e.g., `Australia/Sydney`).
-- DB_PATH: SQLite DB path (default `logs/internet_status.db`).
-- REDIS_URL: Redis URL for caching (default `redis://localhost:6379/0`).
+- DB_PATH: SQLite DB path (default `/app/data/internet_status.db`).
+- LOG_DIR: Directory for runtime logs and counters (default `/app/logs`).
+- REDIS_URL: Optional Redis URL for caching. If unset, the app uses SimpleCache.
 - PING_COUNT_PER_TARGET: Pings per target (default `5`).
 - PING_TIMEOUT: Ping timeout in seconds (default `2`).
 - RETENTION_DAYS: Days of history to keep (default `14`).
@@ -175,18 +179,11 @@ docker-compose down
 
 ### ⚠️ Data Persistence
 
-The included `docker-compose.yml` mounts `./logs` from the host to `/app/logs` in the container by default. The SQLite database lives at `logs/internet_status.db`, so your data persists across restarts and `docker-compose down`.
+The compose file mounts two host directories for persistence by default:
+- `./data` -> `/app/data` (SQLite database)
+- `./logs` -> `/app/logs` (runtime logs and counters)
 
-If you remove or change this volume mapping, historical data will not persist. The relevant portion of the compose file is:
-
-```yaml
-services:
-  local-network-monitor:
-    volumes:
-      - ./logs:/app/logs
-```
-
-Keep this mapping to retain your history on the host.
+Keep these mappings to ensure history survives restarts and `docker-compose down`.
 
 -----
 
@@ -203,7 +200,7 @@ python3 internet_status_dashboard.py
 Populate the SQLite database with sample data by running the checker once:
 
 ```bash
-bash check_internet.sh
+bash scripts/check_internet.sh
 ```
 
 For best caching performance, run a local Redis (`redis-server`) or leave defaults; the app falls back gracefully if cache errors occur.
@@ -214,4 +211,3 @@ For best caching performance, run a local Redis (`redis-server`) or leave defaul
 
 - Manual: The dashboard button triggers `power_cycle_nbn_override.py` and logs a “manually triggered” power cycle event.
 - Automatic: `check_internet.sh` runs every minute and calls `power_cycle_nbn.py` after `FAILURE_THRESHOLD` consecutive full failures. The action respects `TAPO_COOLDOWN_SECONDS` to avoid rapid repeats.
-

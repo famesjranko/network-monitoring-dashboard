@@ -1,28 +1,25 @@
-# Use an official Python runtime as a parent image - v3.8.18-slim
-FROM python:3.8.18-slim
+# Use a modern Python runtime
+FROM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies: iputils-ping, sqlite3, redis-server, and supervisord
+# Install system dependencies: iputils-ping, sqlite3 CLI, supervisord, curl, tzdata
 RUN apt-get update && \
-    apt-get install -y \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
         iputils-ping \
         sqlite3 \
-        redis-server \
         supervisor \
-        curl && \
+        curl \
+        tzdata \
+        libcap2-bin && \
     rm -rf /var/lib/apt/lists/*
 
-# Configure Redis to limit memory usage
-RUN echo "maxmemory 256mb" >> /etc/redis/redis.conf && \
-    echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf && \
-    # Disable persistence (cache-only use): avoid bgsave/AOF forks
-    echo "save \"\"" >> /etc/redis/redis.conf && \
-    echo "appendonly no" >> /etc/redis/redis.conf
+# Create runtime directories
+RUN mkdir -p logs data scripts
 
-# Create the logs directory
-RUN mkdir -p logs
+# Create non-root user for runtime
+RUN useradd -m -u 10001 appuser && chown -R appuser:appuser /app
 
 # Copy the requirements file into the container at /app
 COPY requirements.txt .
@@ -31,19 +28,18 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code into the container at /app
-COPY check_internet.sh \
-     internet_status_dashboard.py \
-     power_cycle_nbn.py \
-     power_cycle_nbn_override.py .
+COPY internet_status_dashboard.py .
+COPY src/ ./src/
+COPY scripts/ ./scripts/
 
 # Copy Dash assets (CSS/JS)
 COPY assets/ ./assets/
 
 # Make the check_internet.sh script executable
-RUN chmod +x check_internet.sh
+RUN chmod +x scripts/check_internet.sh
 
 # Configure supervisord
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Expose port for the Dash app
 EXPOSE 8050
@@ -52,5 +48,15 @@ EXPOSE 8050
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl --fail http://localhost:8050/health || exit 1
 
-# Start supervisord
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Ensure our src is importable
+ENV PYTHONPATH=/app/src
+
+# Allow non-root ping (grant cap_net_raw to ping binary)
+RUN setcap cap_net_raw+ep /bin/ping || true && \
+    (command -v /usr/bin/ping >/dev/null 2>&1 && setcap cap_net_raw+ep /usr/bin/ping || true)
+
+# Entrypoint performs one-time permission fixups then launches supervisord
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+CMD ["/usr/local/bin/entrypoint.sh"]

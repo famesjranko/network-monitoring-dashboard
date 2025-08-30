@@ -16,20 +16,6 @@ from flask import jsonify
 from flask_caching import Cache
 from tapo import ApiClient
 
-# ---------- Paths & config ----------
-
-# Directory of THIS file (works under gunicorn)
-BASE_DIR = Path(__file__).resolve().parent
-
-# Single source of truth for DB path (override with env if you like)
-DB_PATH = os.environ.get("DB_PATH", str(BASE_DIR / "logs" / "internet_status.db"))
-
-# Redis URL (override with env if needed)
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-
-# Timezone for display (keep storage/filtering in UTC)
-DISPLAY_TZ = os.environ.get("DISPLAY_TZ", "UTC")
-
 # ---------- Logging ----------
 
 logging.basicConfig(
@@ -39,19 +25,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ---------- Paths & config ----------
+
+# Directory of THIS file (works under gunicorn)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Single source of truth for DB path (override with env if you like)
+DB_PATH = os.environ.get("DB_PATH", str(BASE_DIR / "data" / "internet_status.db"))
+
+# Redis URL (optional). If unset or empty, fall back to in-process SimpleCache.
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+
+# Timezone for display (keep storage/filtering in UTC)
+DISPLAY_TZ = os.environ.get("DISPLAY_TZ", "UTC")
+
+# Log effective config
+try:
+    db_exists = Path(DB_PATH).exists()
+    db_size = Path(DB_PATH).stat().st_size if db_exists else 0
+    logger.info(
+        f"Config: DB_PATH={DB_PATH} (exists={db_exists}, size={db_size} bytes), "
+        f"REDIS_URL={REDIS_URL}, DISPLAY_TZ={DISPLAY_TZ}"
+    )
+except Exception:
+    logger.info(f"Config: DB_PATH={DB_PATH}, REDIS_URL={REDIS_URL}, DISPLAY_TZ={DISPLAY_TZ}")
+
 # ---------- Dash app ----------
 
 app = dash.Dash(__name__)
 server = app.server  # expose Flask server for caching / healthcheck
 
-cache = Cache(
-    app.server,
-    config={
-        "CACHE_TYPE": "redis",
-        "CACHE_REDIS_URL": REDIS_URL,
-        "CACHE_DEFAULT_TIMEOUT": 60,  # seconds
-    },
-)
+if REDIS_URL:
+    cache = Cache(
+        app.server,
+        config={
+            "CACHE_TYPE": "redis",
+            "CACHE_REDIS_URL": REDIS_URL,
+            "CACHE_DEFAULT_TIMEOUT": 60,
+        },
+    )
+    logger.info(f"Cache: Using Redis backend at {REDIS_URL}")
+else:
+    cache = Cache(
+        app.server,
+        config={
+            "CACHE_TYPE": "SimpleCache",
+            "CACHE_DEFAULT_TIMEOUT": 60,
+        },
+    )
+    logger.info("Cache: Using in-process SimpleCache backend")
 
 # ---------- Helpers ----------
 
@@ -72,8 +94,10 @@ BADGE_BASE_STYLE = {
 }
 
 def _connect_ro(db_path: str) -> sqlite3.Connection:
-    """Open SQLite in read-only mode to avoid journal creation from the web worker."""
-    return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    """Open SQLite for reading. Use a normal connection to allow SQLite to
+    create/access WAL/SHM files, avoiding 'readonly database' errors during WAL.
+    """
+    return sqlite3.connect(db_path)
 
 # Safe TZ convert helper: keep UTC if conversion fails
 
@@ -763,6 +787,8 @@ app.clientside_callback(
 @server.route("/health")
 def health_check():
     return jsonify(status="ok"), 200
+
+## debug route removed in hardened build
 
 # ---------- Dev runner (unused under gunicorn) ----------
 

@@ -11,12 +11,14 @@ FAILURE_THRESHOLD="${FAILURE_THRESHOLD:-5}"   # consecutive minutes down before 
 
 # --- Paths ---
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-DB_PATH="${DB_PATH:-$SCRIPT_DIR/logs/internet_status.db}"
-LOGS_DIR="$(dirname "$DB_PATH")"
-FAILURE_COUNT_FILE="$LOGS_DIR/failure_count.txt"
-MAINT_COUNTER_FILE="$LOGS_DIR/maintenance_counter.txt"
+# Default to keeping the database in a dedicated data directory,
+# with logs and counters separate.
+DB_PATH="${DB_PATH:-$SCRIPT_DIR/../data/internet_status.db}"
+LOG_DIR="${LOG_DIR:-$SCRIPT_DIR/../logs}"
+FAILURE_COUNT_FILE="$LOG_DIR/failure_count.txt"
+MAINT_COUNTER_FILE="$LOG_DIR/maintenance_counter.txt"
 
-mkdir -p "$LOGS_DIR"
+mkdir -p "$(dirname "$DB_PATH")" "$LOG_DIR"
 [ -f "$FAILURE_COUNT_FILE" ] || echo "0" > "$FAILURE_COUNT_FILE"
 [ -f "$MAINT_COUNTER_FILE" ] || echo "0" > "$MAINT_COUNTER_FILE"
 
