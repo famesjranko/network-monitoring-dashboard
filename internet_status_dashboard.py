@@ -442,8 +442,8 @@ app.layout = html.Div(
             style={"marginTop": "20px", "backgroundColor": "#1e1e1e", "padding": "10px", "borderRadius": "8px"},
         ),
         dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # refresh every minute
-        dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # status badge every 2s
-        # Use internet-interval (2s) only to refresh compact flag when threshold crossed
+        dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # badge + compact-mode every 2s
+        # Fast interval drives live badge and compact-mode toggle; all other data uses 60s
     ],
     style={"backgroundColor": "#121212", "padding": "20px"},
 )
@@ -745,6 +745,8 @@ def on_power_cycle(n_clicks, n_fast, state, started_at):
             return state or "idle", started_at
 
     # Auto-reset after ~40s
+    # TODO: could use log: 2025-08-30 07:55:10,532 - INFO - nbn smart plug has been turned back on after retry attempt 1.
+    # to change button state
     try:
         if state == "processing" and started_at and (int(time.time()) - int(started_at) >= 40):
             return "idle", started_at
@@ -770,8 +772,6 @@ def update_button_style(state, tapo_status, current_style):
         return {**current_style, "backgroundColor": "#808080", "cursor": "not-allowed"}, True, "Tapo Not Connected"
     else:
         return {**current_style, "backgroundColor": "#00ccff", "cursor": "pointer"}, False, "Restart NBN"
-
-## merged power-cycle trigger + reset into on_power_cycle callback above
 
 @app.callback(
     Output("internet-status", "children"),
@@ -811,8 +811,6 @@ app.clientside_callback(
 @server.route("/health")
 def health_check():
     return jsonify(status="ok"), 200
-
-## debug route removed in hardened build
 
 # ---------- Dev runner (unused under gunicorn) ----------
 
