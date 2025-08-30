@@ -47,42 +47,49 @@ cd network-monitoring-dashboard
 To customize monitoring behavior or enable TP-Link Tapo smart plug control, open the `docker-compose.yml` file and uncomment the `environment` section. Then fill in the values as needed:
 
 ```yaml
-version: '3.8'
-
 services:
   local-network-monitor:
+    image: network-monitor:latest
     build: .
-    container_name: local-network-monitor-container
+    container_name: local-network-monitor
+    restart: unless-stopped
     ports:
       - "8050:8050"
     environment:
+      - DISPLAY_TZ=Australia/Melbourne # where you are
+      - DB_PATH=/app/logs/internet_status.db
+      - RETENTION_DAYS=14
+      - VACUUM_INTERVAL_RUNS=720   # ~12h if check runs every minute
       # Comma-separated list of IPs to ping for internet connectivity checks
       # - Defaults to 8.8.8.8,1.1.1.1,9.9.9.9 if not set
-      # - Example: INTERNET_CHECK_TARGETS=1.1.1.1,8.8.4.4
+      # - Example: 8.8.8.8,1.1.1.1
       # - INTERNET_CHECK_TARGETS=8.8.8.8,1.1.1.1,9.9.9.9
 
       # Tapo credentials and device details for controlling the smart plug
-      # Required only if using a Tapo P100 to power cycle your modem/router
-      # - TAPO_EMAIL=your_tapo_email@example.com
-      # - TAPO_PASSWORD=your_super_secret_password
-      # - TAPO_DEVICE_IP=192.168.1.100
-      # - TAPO_DEVICE_NAME="NBN Modem Plug"
+      # - TAPO_EMAIL=
+      # - TAPO_PASSWORD=
+      # - TAPO_DEVICE_IP=
+      # - TAPO_DEVICE_NAME=""
 
       # Cooldown period in seconds between allowed modem reboots (via smart plug)
-      # Prevents repeated power cycles within a short period
-      # - Default: 3600 (1 hour)
-      # - Example: TAPO_COOLDOWN_SECONDS=1800
+      # Prevents repeated power cycles within a short period.
+      # - Example: 3600 (1 hour)
       # - TAPO_COOLDOWN_SECONDS=3600
 
       # Number of consecutive failed checks before triggering power cycle
       # - Default: 5
       # - Example: FAILURE_THRESHOLD=3
       # - FAILURE_THRESHOLD=5
+    volumes:
+      - ./logs:/app/logs
 ```
 
 **Notes:**
 
 * `INTERNET_CHECK_TARGETS` and `FAILURE_THRESHOLD` work independently of Tapo and are always respected.
+* `RETENTION_DAYS` limits how long records are kept for
+* `VACUUM_INTERVAL_RUNS` how often db vacuuming is run
+* `DISPLAY_TZ` can set local time for dashboard or leave unset for UTC
 * If you're **not using a Tapo smart plug**, just leave the Tapo-related variables commented out.
 * It's recommended to assign a **static IP address** to your Tapo plug via your router's DHCP settings to ensure stable communication.
 
@@ -137,6 +144,9 @@ These variables can be set in your `docker-compose.yml` file to customize monito
 | `TAPO_DEVICE_IP`         | **Optional.** Static IP address of your Tapo plug (recommended to reserve via DHCP).         |
 | `TAPO_DEVICE_NAME`       | **Optional.** Friendly display name for your smart plug device (used in logs and UI).        |
 | `TAPO_COOLDOWN_SECONDS`  | **Optional.** Cooldown (in seconds) between allowed modem reboots. Default: `3600` (1 hour). |
+| `RETENTION_DAYS`         | limits how long records are kept for                                                         |
+* `VACUUM_INTERVAL_RUNS`   | how often db vacuuming is run                                                                |
+* `DISPLAY_TZ`             | **Optional.** can set local time for dashboard or leave unset for UTC                        |
 
 > 💡 `INTERNET_CHECK_TARGETS` is obviously used even if you're not using a Tapo plug.
 
@@ -159,28 +169,3 @@ To stop the container, run:
 ```bash
 docker-compose down
 ```
-
-### ⚠️ Data Persistence (Optional\!)
-
-By default, the SQLite database (`internet_status.db`) is stored inside the container. **This means all historical data will be deleted if you run `docker-compose down`**.
-
-To make your data persistent, you must add a **volume mount** to your `docker-compose.yml` file. This links the `logs` directory inside the container to a `logs` directory on your host machine.
-
-Modify your `docker-compose.yml` to include the `volumes` section like this:
-
-```yaml
-# docker-compose.yml
-
-services:
-  local-network-monitor:
-    build: .
-    container_name: local-network-monitor-container
-    ports:
-      - "8050:8050"
-    volumes:
-      - ./logs:/app/logs  # <-- Add this line
-    environment:
-      # ... your environment variables
-```
-
-With this change, your database will be safe on your local machine, even if the container is removed.
