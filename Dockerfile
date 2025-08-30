@@ -11,7 +11,8 @@ RUN apt-get update && \
         sqlite3 \
         supervisor \
         curl \
-        tzdata && \
+        tzdata \
+        libcap2-bin && \
     rm -rf /var/lib/apt/lists/*
 
 # Create runtime directories
@@ -50,5 +51,12 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Ensure our src is importable
 ENV PYTHONPATH=/app/src
 
-# Start supervisord (run as root; programs can drop privileges)
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Allow non-root ping (grant cap_net_raw to ping binary)
+RUN setcap cap_net_raw+ep /bin/ping || true && \
+    (command -v /usr/bin/ping >/dev/null 2>&1 && setcap cap_net_raw+ep /usr/bin/ping || true)
+
+# Entrypoint performs one-time permission fixups then launches supervisord
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+CMD ["/usr/local/bin/entrypoint.sh"]

@@ -49,30 +49,15 @@ cp .env.example .env
 # then open .env and set values as needed
 ```
 
-The included `docker-compose.yml` wires everything up using `.env` and persists both logs and the SQLite database via volumes:
+The included `docker-compose.yml` wires everything up using `.env` and persists both logs and the SQLite database via volumes. Redis is optional.
 
 ```yaml
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: local-network-redis
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    volumes:
-      - redis-data:/data
-
   local-network-monitor:
     image: network-monitor:latest
     build: .
     container_name: local-network-monitor
     restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_healthy
     ports:
       - "8050:8050"
     env_file:
@@ -81,8 +66,6 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
 
-volumes:
-  redis-data:
 ```
 
 Notes:
@@ -112,10 +95,7 @@ http://localhost:8050
 
 ## 🏗️ System Architecture
 
-This project runs as two containers managed by Docker Compose:
-
-- `redis`: an external Redis 7 container used purely for caching.
-- `local-network-monitor`: the application container based on Python 3.11-slim.
+This project runs the application container managed by Docker Compose.
 
 Inside the application container, `supervisord` manages two processes:
 1) Monitoring script (`scripts/check_internet.sh`) running every minute.
@@ -123,7 +103,13 @@ Inside the application container, `supervisord` manages two processes:
 
 Additional details:
 - Health endpoint: the app exposes `GET /health`; the Docker image defines a `HEALTHCHECK` against it.
-- Redis is cache-only (no persistence) and can be scaled independently if desired.
+- Caching: Redis is optional. If `REDIS_URL` is set, the app uses Redis; otherwise it uses an in-process SimpleCache.
+
+To enable Redis, use the override file and set `REDIS_URL`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.redis.yml up -d
+```
 
 -----
 
@@ -140,7 +126,7 @@ Set these in `.env` (the compose file uses `env_file: .env`). Tapo-related varia
 | `DISPLAY_TZ`               | `UTC`                                      | Timezone for displaying timestamps in the UI. |
 | `DB_PATH`                  | `/app/data/internet_status.db`             | Path to SQLite DB inside the container. |
 | `LOG_DIR`                  | `/app/logs`                                | Directory for runtime logs and counters. |
-| `REDIS_URL`                | `redis://redis:6379/0`                     | Redis connection URL for caching (compose service `redis`). |
+| `REDIS_URL`                | — (unset)                                   | Optional. If set, enables Redis caching. Example: `redis://redis:6379/0`. |
 | `PING_COUNT_PER_TARGET`    | `5`                                        | Number of pings per target per minute in the checker. |
 | `PING_TIMEOUT`             | `2`                                        | Ping timeout (seconds) per probe. |
 | `RETENTION_DAYS`           | `14`                                       | Days of history to keep in SQLite; older rows are pruned. |
@@ -163,7 +149,7 @@ Copy `.env.example` to `.env` and set keys as needed. Common entries:
 - DISPLAY_TZ: UI timezone (e.g., `Australia/Sydney`).
 - DB_PATH: SQLite DB path (default `/app/data/internet_status.db`).
 - LOG_DIR: Directory for runtime logs and counters (default `/app/logs`).
-- REDIS_URL: Redis URL for caching (default `redis://redis:6379/0`).
+- REDIS_URL: Optional Redis URL for caching. If unset, the app uses SimpleCache.
 - PING_COUNT_PER_TARGET: Pings per target (default `5`).
 - PING_TIMEOUT: Ping timeout in seconds (default `2`).
 - RETENTION_DAYS: Days of history to keep (default `14`).

@@ -33,8 +33,8 @@ BASE_DIR = Path(__file__).resolve().parent
 # Single source of truth for DB path (override with env if you like)
 DB_PATH = os.environ.get("DB_PATH", str(BASE_DIR / "data" / "internet_status.db"))
 
-# Redis URL (override with env if needed)
-REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+# Redis URL (optional). If unset or empty, fall back to in-process SimpleCache.
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
 
 # Timezone for display (keep storage/filtering in UTC)
 DISPLAY_TZ = os.environ.get("DISPLAY_TZ", "UTC")
@@ -55,14 +55,25 @@ except Exception:
 app = dash.Dash(__name__)
 server = app.server  # expose Flask server for caching / healthcheck
 
-cache = Cache(
-    app.server,
-    config={
-        "CACHE_TYPE": "redis",
-        "CACHE_REDIS_URL": REDIS_URL,
-        "CACHE_DEFAULT_TIMEOUT": 60,  # seconds
-    },
-)
+if REDIS_URL:
+    cache = Cache(
+        app.server,
+        config={
+            "CACHE_TYPE": "redis",
+            "CACHE_REDIS_URL": REDIS_URL,
+            "CACHE_DEFAULT_TIMEOUT": 60,
+        },
+    )
+    logger.info(f"Cache: Using Redis backend at {REDIS_URL}")
+else:
+    cache = Cache(
+        app.server,
+        config={
+            "CACHE_TYPE": "SimpleCache",
+            "CACHE_DEFAULT_TIMEOUT": 60,
+        },
+    )
+    logger.info("Cache: Using in-process SimpleCache backend")
 
 # ---------- Helpers ----------
 
@@ -777,27 +788,7 @@ app.clientside_callback(
 def health_check():
     return jsonify(status="ok"), 200
 
-@server.route("/debug/db")
-def debug_db():
-    info = {"db_path": DB_PATH}
-    try:
-        p = Path(DB_PATH)
-        info.update(
-            exists=p.exists(), size=p.stat().st_size if p.exists() else 0,
-            mtime=p.stat().st_mtime if p.exists() else None,
-        )
-    except Exception as e:
-        info["stat_error"] = str(e)
-    try:
-        with _connect_ro(DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) FROM internet_status")
-            info["internet_status_rows"] = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM power_cycle_events")
-            info["power_cycle_events_rows"] = cur.fetchone()[0]
-    except Exception as e:
-        info["query_error"] = str(e)
-    return jsonify(info), 200
+## debug route removed in hardened build
 
 # ---------- Dev runner (unused under gunicorn) ----------
 
