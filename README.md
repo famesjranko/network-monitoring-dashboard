@@ -54,7 +54,7 @@ The included `docker-compose.yml` wires everything up using `.env` and persists 
 ```yaml
 services:
   local-network-monitor:
-    image: network-monitor:latest
+    image: network-monitor:0.1.0
     build: .
     container_name: local-network-monitor
     restart: unless-stopped
@@ -126,6 +126,7 @@ Set these in `.env` (the compose file uses `env_file: .env`). Tapo-related varia
 | `DISPLAY_TZ`               | `UTC`                                      | Timezone for displaying timestamps in the UI. |
 | `DB_PATH`                  | `/app/data/internet_status.db`             | Path to SQLite DB inside the container. |
 | `LOG_DIR`                  | `/app/logs`                                | Directory for runtime logs and counters. |
+| `LOG_LEVEL`                | `INFO`                                      | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `REDIS_URL`                | — (unset)                                   | Optional. If set, enables Redis caching. Example: `redis://redis:6379/0`. |
 | `PING_COUNT_PER_TARGET`    | `5`                                        | Number of pings per target per minute in the checker. |
 | `PING_TIMEOUT`             | `2`                                        | Ping timeout (seconds) per probe. |
@@ -185,6 +186,25 @@ The compose file mounts two host directories for persistence by default:
 
 Keep these mappings to ensure history survives restarts and `docker-compose down`.
 
+### Non-Root UID/GID Mapping
+
+To avoid root-owned files on your host, the app container can run as your host user:
+
+- Set your user/group IDs in `.env`:
+
+```bash
+echo "LOCAL_UID=$(id -u)" >> .env
+echo "LOCAL_GID=$(id -g)" >> .env
+```
+
+- If you previously ran as root, fix ownership once on the host:
+
+```bash
+sudo chown -R $(id -u):$(id -g) data logs
+```
+
+The compose file maps `user: "${LOCAL_UID}:${LOCAL_GID}"` for the app service.
+
 -----
 
 ## 🧰 Local Development
@@ -211,3 +231,26 @@ For best caching performance, run a local Redis (`redis-server`) or leave defaul
 
 - Manual: The dashboard button triggers `power_cycle_nbn_override.py` and logs a “manually triggered” power cycle event.
 - Automatic: `check_internet.sh` runs every minute and calls `power_cycle_nbn.py` after `FAILURE_THRESHOLD` consecutive full failures. The action respects `TAPO_COOLDOWN_SECONDS` to avoid rapid repeats.
+
+-----
+
+## 🧩 Advanced
+
+- Enable Redis caching with an override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.redis.yml up -d
+```
+
+- Apply local resource caps (CPU/RAM) with an override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.resources.yml up -d
+```
+
+- Versioned image tags: the compose file uses a versioned tag (e.g., `network-monitor:0.1.0`). To bump on release:
+
+```bash
+docker build -t network-monitor:0.2.0 .
+sed -i 's/network-monitor:0.1.0/network-monitor:0.2.0/' docker-compose.yml
+```
