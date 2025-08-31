@@ -441,9 +441,19 @@ app.layout = html.Div(
             ],
             style={"marginTop": "20px", "backgroundColor": "#1e1e1e", "padding": "10px", "borderRadius": "8px"},
         ),
+<<<<<<< Updated upstream
         dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # refresh every minute
         dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # badge + compact-mode every 2s
         # Fast interval drives live badge and compact-mode toggle; all other data uses 60s
+=======
+        # Important: keep these cadences distinct.
+        # - interval-component (60s): drives data fetches for graphs/table.
+        # - internet-interval (2s): drives live internet badge + compact-mode.
+        # Changing one to match the other will either make the badge laggy
+        # or spam the backend with frequent data queries.
+        dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # refresh every minute (graphs/table)
+        dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # badge + compact-mode every 2s
+>>>>>>> Stashed changes
     ],
     style={"backgroundColor": "#121212", "padding": "20px"},
 )
@@ -559,13 +569,28 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
             "paper_bgcolor": "#1e1e1e",
             "font": {"color": "#ffffff"},
             "titlefont": {"color": "#00ccff"},
+            # Legend outside above plot with small gap (no overlap with top y-axis)
             "legend": (
-                {"orientation": "h", "x": 0, "y": 1.02, "font": {"size": 11}}
+                {
+                    "orientation": "h",
+                    "x": 0.0,
+                    "y": 1.04,
+                    "xanchor": "left",
+                    "yanchor": "bottom",
+                    "font": {"size": 11},
+                }
                 if is_compact
-                else {"orientation": "h", "x": 0, "y": -0.2}
+                else {
+                    "orientation": "h",
+                    "x": 0.0,
+                    "y": 1.02,
+                    "xanchor": "left",
+                    "yanchor": "bottom",
+                }
             ),
             "hovermode": "closest",
-            "margin": ({"l": 16, "r": 16, "t": 44, "b": 44} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
+            # Compact margins: small top (space above legend), more bottom for x-axis labels
+            "margin": ({"l": 22, "r": 16, "t": 40, "b": 64} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
         },
     }
 
@@ -622,13 +647,27 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
                 "paper_bgcolor": "#1e1e1e",
                 "font": {"color": "#ffffff"},
                 "titlefont": {"color": "#ffcc00"},
+                # Legend outside above plot with small gap (no overlap with top y-axis)
                 "legend": (
-                    {"orientation": "h", "x": 0, "y": 1.02, "font": {"size": 11}}
+                    {
+                        "orientation": "h",
+                        "x": 0.0,
+                        "y": 1.04,
+                        "xanchor": "left",
+                        "yanchor": "bottom",
+                        "font": {"size": 11},
+                    }
                     if is_compact
-                    else {"orientation": "h", "x": 0, "y": -0.2}
+                    else {
+                        "orientation": "h",
+                        "x": 0.0,
+                        "y": 1.02,
+                        "xanchor": "left",
+                        "yanchor": "bottom",
+                    }
                 ),
                 "hovermode": "closest",
-                "margin": ({"l": 16, "r": 16, "t": 44, "b": 44} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
+                "margin": ({"l": 22, "r": 16, "t": 40, "b": 64} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
             },
         }
     else:
@@ -703,7 +742,7 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
             "font": {"color": "#ffffff"},
             "titlefont": {"color": "#ff0000"},
             "hovermode": "closest",
-            "margin": ({"l": 16, "r": 16, "t": 44, "b": 44} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
+            "margin": ({"l": 22, "r": 16, "t": 32, "b": 64} if is_compact else {"l": 60, "r": 30, "t": 60, "b": 60}),
         },
     }
 
