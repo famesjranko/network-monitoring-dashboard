@@ -441,11 +441,6 @@ app.layout = html.Div(
             ],
             style={"marginTop": "20px", "backgroundColor": "#1e1e1e", "padding": "10px", "borderRadius": "8px"},
         ),
-<<<<<<< Updated upstream
-        dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # refresh every minute
-        dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # badge + compact-mode every 2s
-        # Fast interval drives live badge and compact-mode toggle; all other data uses 60s
-=======
         # Important: keep these cadences distinct.
         # - interval-component (60s): drives data fetches for graphs/table.
         # - internet-interval (2s): drives live internet badge + compact-mode.
@@ -453,7 +448,6 @@ app.layout = html.Div(
         # or spam the backend with frequent data queries.
         dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # refresh every minute (graphs/table)
         dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # badge + compact-mode every 2s
->>>>>>> Stashed changes
     ],
     style={"backgroundColor": "#121212", "padding": "20px"},
 )
