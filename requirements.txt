@@ -5,3 +5,4 @@ pandas==2.0.3
 redis==6.1.1
 tapo==0.8.1
 gunicorn==23.0.0
+speedtest-cli==2.1.3
