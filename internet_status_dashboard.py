@@ -8,6 +8,7 @@ import logging
 import socket
 import asyncio
 import datetime
+import threading
 from pathlib import Path
 
 import dash
@@ -59,6 +60,82 @@ except Exception:
 
 app = dash.Dash(__name__)
 server = app.server  # expose Flask server for caching / healthcheck
+
+# Add custom CSS for dropdown styling
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            .Select-menu-outer {
+                background-color: #1e1e1e !important;
+                border: 1px solid #333 !important;
+            }
+            .Select-option {
+                background-color: #1e1e1e !important;
+                color: #ffffff !important;
+                padding: 8px 12px !important;
+            }
+            .Select-option:hover {
+                background-color: #333 !important;
+                color: #00ccff !important;
+            }
+            .Select-option.is-focused {
+                background-color: #333 !important;
+                color: #00ccff !important;
+            }
+            .Select-option.is-selected {
+                background-color: #00ccff !important;
+                color: #1e1e1e !important;
+            }
+            .dropdown .Select-control {
+                background-color: #121212 !important;
+                border-color: #333 !important;
+            }
+            .dropdown .Select-value-label {
+                color: #ffffff !important;
+            }
+            @keyframes pulse {
+                0% { opacity: 0.6; }
+                50% { opacity: 1; }
+                100% { opacity: 0.6; }
+            }
+            .speed-test-pulse {
+                animation: pulse 1.5s ease-in-out infinite;
+            }
+            @keyframes barberPole {
+                0% { background-position: 0 0; }
+                100% { background-position: 40px 0; }
+            }
+            .speed-test-loading {
+                background: linear-gradient(
+                    45deg,
+                    transparent 25%,
+                    rgba(255,255,255,0.2) 25%,
+                    rgba(255,255,255,0.2) 50%,
+                    transparent 50%,
+                    transparent 75%,
+                    rgba(255,255,255,0.2) 75%
+                );
+                background-size: 40px 40px;
+                animation: barberPole 1s linear infinite;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
 
 if REDIS_URL:
     cache = Cache(
@@ -118,45 +195,35 @@ def _to_display_tz(ts: pd.Series) -> pd.Series:
         return ts
 
 # --- Live internet status check for the badge ---
-async def check_live_internet_status_for_badge():
-    # get env IPs or fallback to defaults
+def check_live_internet_status_for_badge():
+    # Use just the first target for quick badge responsiveness
     raw_targets = os.environ.get("INTERNET_CHECK_TARGETS", "8.8.8.8,1.1.1.1,9.9.9.9")
     targets = [ip.strip() for ip in raw_targets.split(",") if ip.strip()]
+    target = targets[0] if targets else "8.8.8.8"  # Use first target only
 
-    ping_count_per_target = 1  # one ping per target for speed
-    ping_timeout = 1           # 1s timeout for responsiveness
+    ping_timeout = 1  # 1s timeout for responsiveness
 
-    successful_pings = 0
-    total_pings = len(targets) * ping_count_per_target
+    try:
+        # Single ping for speed
+        command = ["ping", "-c", "1", "-W", str(ping_timeout), target]
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=ping_timeout + 1
+        )
+        ping_output = result.stdout.strip()
+        logger.debug(f"Internet status badge, ping output: {ping_output}")
 
-    for target in targets:
-        try:
-            # -c count, -W timeout seconds; rely on numeric output by default
-            command = ["ping", "-c", str(ping_count_per_target), "-W", str(ping_timeout), target]
-            process = await asyncio.create_subprocess_exec(
-                *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            ping_output = stdout.decode().strip()
-            logger.debug(f"Internet status badge, ping output: {ping_output}")
-
-            if process.returncode == 0:
-                # e.g. "1 packets transmitted, 1 received, 0% packet loss"
-                m = re.search(r"(\d+)\s+received", ping_output)
-                if m:
-                    successful_pings += int(m.group(1))
-            else:
-                logger.debug(f"Ping to {target} failed: {stderr.decode().strip()}")
-        except Exception as e:
-            logger.error(f"Error during live ping check for {target}: {e}")
-
-    success_pct = int((successful_pings / total_pings) * 100) if total_pings > 0 else 0
-
-    if success_pct == 100:
-        return "Internet: Up", "#4CAF50"         # green
-    elif success_pct > 0:
-        return "Internet: Partially Up", "#ffcc00"  # orange
-    else:
+        if result.returncode == 0:
+            # Success - internet is up
+            return "Internet: Up", "#4CAF50"         # green
+        else:
+            logger.debug(f"Ping to {target} failed: {result.stderr.strip()}")
+            return "Internet: Down", "#ff6666"       # red
+    except Exception as e:
+        logger.error(f"Error during live ping check for {target}: {e}")
         return "Internet: Down", "#ff6666"       # red
 
 # ---------- Data access ----------
@@ -267,7 +334,55 @@ def is_internet_up() -> bool:
     except OSError:
         return False
 
-async def check_tapo_connection():
+def run_speed_test():
+    """Run speed test using Python speedtest library"""
+    try:
+        import speedtest
+
+        logger.info("Starting speed test...")
+        st = speedtest.Speedtest()
+
+        # Get best server based on ping
+        st.get_best_server()
+        server_info = st.results.server
+
+        # Run download test
+        logger.info("Running download test...")
+        download_speed = st.download()
+
+        # Run upload test
+        logger.info("Running upload test...")
+        upload_speed = st.upload()
+
+        # Get ping
+        ping_ms = st.results.ping
+
+        # Convert bits/s to Mbps
+        download_mbps = round(download_speed / 1_000_000, 2)
+        upload_mbps = round(upload_speed / 1_000_000, 2)
+
+        server_name = server_info.get("sponsor", "Unknown")
+        server_location = f"{server_info.get('name', '')}, {server_info.get('country', '')}"
+
+        logger.info(f"Speed test completed: {download_mbps}↓ {upload_mbps}↑ {ping_ms}ms")
+
+        return {
+            "success": True,
+            "download": download_mbps,
+            "upload": upload_mbps,
+            "ping": round(ping_ms, 1),
+            "server": server_name,
+            "location": server_location.strip(", ")
+        }
+
+    except ImportError:
+        logger.error("speedtest-py library not installed. Install with: pip install speedtest-cli")
+        return {"success": False, "error": "speedtest-py library not installed"}
+    except Exception as e:
+        logger.error(f"Speed test error: {e}")
+        return {"success": False, "error": f"Speed test failed: {str(e)}"}
+
+def check_tapo_connection():
     email = os.environ.get("TAPO_EMAIL")
     password = os.environ.get("TAPO_PASSWORD")
     device_ip = os.environ.get("TAPO_DEVICE_IP")
@@ -280,11 +395,19 @@ async def check_tapo_connection():
         return False, "Tapo credentials missing."
 
     try:
-        client = ApiClient(email, password)
-        device = await client.p100(device_ip)
-        await device.refresh_session()
-        logger.debug("Tapo device connected")
-        return True, "Tapo device connected."
+        # Simple socket test to device IP instead of full Tapo API
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        result = sock.connect_ex((device_ip, 80))
+        sock.close()
+
+        if result == 0:
+            logger.debug("Tapo device reachable")
+            return True, "Tapo device reachable."
+        else:
+            logger.debug("Tapo device unreachable")
+            return False, "Tapo device unreachable."
     except Exception as e:
         # Log a concise warning without credentials
         logger.warning(f"Tapo connectivity failed: {e}")
@@ -335,31 +458,127 @@ app.layout = html.Div(
                 "marginBottom": "20px",
             },
         ),
+        # Speed Test Section
+        html.Div(
+            id="speed-test-section",
+            children=[
+                html.Div(
+                    [
+                        html.Button(
+                            "Speed Test",
+                            id="speed-test-button",
+                            n_clicks=0,
+                            className="badge action-button",
+                            style={
+                                "cursor": "pointer",
+                                "backgroundColor": "#888888",
+                                "color": "#1e1e1e",
+                            },
+                        ),
+                    ],
+                    style={"textAlign": "right", "margin": "0"}
+                ),
+                html.Div(
+                    id="speed-test-visualization",
+                    style={"display": "none"},
+                    children=[
+                        html.H4("Running Speed Test...", style={"color": "#00ccff", "textAlign": "center"}),
+                        html.Div(
+                            [
+                                html.Div("📊 Testing Internet Speed", id="speed-test-phase", style={"color": "#ffffff", "margin": "10px 0", "textAlign": "center"}),
+                                html.Div(
+                                    style={
+                                        "backgroundColor": "#333",
+                                        "borderRadius": "10px",
+                                        "height": "20px",
+                                        "overflow": "hidden",
+                                        "position": "relative"
+                                    },
+                                    children=[
+                                        html.Div(
+                                            id="speed-test-progress",
+                                            style={
+                                                "backgroundColor": "#00ccff",
+                                                "height": "100%",
+                                                "width": "100%",
+                                                "position": "absolute",
+                                                "borderRadius": "10px",
+                                                "display": "none"
+                                            }
+                                        )
+                                    ]
+                                ),
+                            ],
+                            style={"textAlign": "center", "padding": "20px 0"}
+                        ),
+                    ]
+                ),
+                html.Div(
+                    id="speed-test-results-display",
+                    style={"display": "none"},
+                ),
+            ],
+            style={
+                "backgroundColor": "#1e1e1e",
+                "padding": "10px 20px",
+                "borderRadius": "8px",
+                "marginBottom": "20px",
+            }
+        ),
         html.Div(
             [
-                html.H4("Select Date Range", style={"color": "#ffffff"}),
-                dcc.Dropdown(
-                    id="date-range-dropdown",
-                    options=[
-                        {"label": "Last 12 Hours", "value": "last_12_hours"},
-                        {"label": "Last 24 Hours", "value": "last_24_hours"},
-                        {"label": "Last 48 Hours", "value": "last_48_hours"},
-                        {"label": "Last 7 Days", "value": "last_7_days"},
-                        {"label": "All Time", "value": "all_time"},
+                html.Div(
+                    [
+                        html.H4("Date Range", style={"color": "#ffffff"}),
+                        dcc.Dropdown(
+                            id="date-range-dropdown",
+                            options=[
+                                {"label": "Last 12 Hours", "value": "last_12_hours"},
+                                {"label": "Last 24 Hours", "value": "last_24_hours"},
+                                {"label": "Last 48 Hours", "value": "last_48_hours"},
+                                {"label": "Last 7 Days", "value": "last_7_days"},
+                                {"label": "All Time", "value": "all_time"},
+                            ],
+                            value="last_12_hours",
+                            clearable=False,
+                            style={"backgroundColor": "#121212", "color": "#ffffff", "width": "100%"},
+                            className="dropdown",
+                        ),
                     ],
-                    value="last_12_hours",
-                    clearable=False,
-                    style={"backgroundColor": "#121212", "color": "#00ccff", "width": "100%"},
-                    className="dropdown",
+                    style={"width": "48%", "display": "inline-block"},
+                ),
+                html.Div(
+                    [
+                        html.H4("Refresh Rate", style={"color": "#ffffff"}),
+                        dcc.Dropdown(
+                            id="refresh-rate-dropdown",
+                            options=[
+                                {"label": "30 seconds", "value": 30},
+                                {"label": "1 minute", "value": 60},
+                                {"label": "2 minutes", "value": 120},
+                                {"label": "5 minutes", "value": 300},
+                                {"label": "Manual only (use browser refresh)", "value": 0},
+                            ],
+                            value=60,
+                            clearable=False,
+                            style={"backgroundColor": "#121212", "color": "#ffffff", "width": "100%"},
+                            className="dropdown",
+                        ),
+                    ],
+                    style={"width": "48%", "display": "inline-block", "marginLeft": "4%"},
                 ),
             ],
             className="section",
+            style={"display": "flex", "justifyContent": "space-between"},
         ),
         dcc.Store(id="filtered-data"),
         dcc.Store(id="button-state-store"),
         dcc.Store(id="power-cycle-start"),
         dcc.Store(id="tapo-connection-status"),
         dcc.Store(id="is-compact"),
+        dcc.Store(id="refresh-interval-store", data=60),
+        dcc.Store(id="speed-test-results"),
+        dcc.Store(id="speed-test-running", data=False),
         html.Div(
             [
                 html.Div(
@@ -442,11 +661,11 @@ app.layout = html.Div(
             style={"marginTop": "20px", "backgroundColor": "#1e1e1e", "padding": "10px", "borderRadius": "8px"},
         ),
         # Important: keep these cadences distinct.
-        # - interval-component (60s): drives data fetches for graphs/table.
+        # - interval-component (dynamic): drives data fetches for graphs/table.
         # - internet-interval (2s): drives live internet badge + compact-mode.
         # Changing one to match the other will either make the badge laggy
         # or spam the backend with frequent data queries.
-        dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # refresh every minute (graphs/table)
+        dcc.Interval(id="interval-component", interval=60 * 1000, n_intervals=0),  # dynamic refresh (graphs/table)
         dcc.Interval(id="internet-interval", interval=2 * 1000, n_intervals=0),   # badge + compact-mode every 2s
     ],
     style={"backgroundColor": "#121212", "padding": "20px"},
@@ -454,10 +673,130 @@ app.layout = html.Div(
 
 # ---------- Callbacks ----------
 
+@app.callback(
+    [Output("interval-component", "interval"), Output("interval-component", "disabled")],
+    Input("refresh-rate-dropdown", "value")
+)
+def update_refresh_interval(refresh_rate):
+    if refresh_rate == 0:  # Manual only
+        return 60 * 1000, True  # Keep interval but disable it
+    else:
+        return refresh_rate * 1000, False  # Enable with selected interval
+
 @app.callback(Output("tapo-connection-status", "data"), Input("internet-interval", "n_intervals"))
-async def update_tapo_status(n):
-    connected, message = await check_tapo_connection()
+def update_tapo_status(n):
+    connected, message = check_tapo_connection()
     return {"connected": connected, "message": message}
+
+# Global variable to store speed test thread
+speed_test_thread = None
+speed_test_result = None
+
+@app.callback(
+    [
+        Output("speed-test-visualization", "style"),
+        Output("speed-test-results-display", "style"),
+        Output("speed-test-results-display", "children"),
+        Output("speed-test-running", "data"),
+        Output("speed-test-button", "disabled"),
+        Output("speed-test-button", "children"),
+    ],
+    [Input("speed-test-button", "n_clicks"), Input("internet-interval", "n_intervals")],
+    [State("speed-test-running", "data")],
+    prevent_initial_call=True
+)
+def handle_speed_test(n_clicks, n_intervals, is_running):
+    global speed_test_thread, speed_test_result
+
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    trigger = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if trigger == "speed-test-button" and n_clicks and not is_running:
+        # Start speed test in background thread
+        def run_test():
+            global speed_test_result
+            speed_test_result = run_speed_test()
+
+        speed_test_thread = threading.Thread(target=run_test)
+        speed_test_thread.daemon = True
+        speed_test_thread.start()
+
+        return (
+            {"display": "block"},  # Show visualization
+            {"display": "none"},   # Hide results
+            [],                    # Clear results
+            True,                  # Set running state
+            True,                  # Disable button
+            "Running Test..."      # Update button text
+        )
+
+    elif trigger == "internet-interval" and is_running:
+        # Check if test is complete
+        if speed_test_thread and not speed_test_thread.is_alive() and speed_test_result:
+            result = speed_test_result
+            speed_test_result = None  # Clear result
+
+            if result.get("success"):
+                results_display = [
+                    html.H4("Speed Test Results", style={"color": "#00ccff", "textAlign": "center", "marginBottom": "20px"}),
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    html.Div("DOWNLOAD", style={"fontSize": "12px", "fontWeight": "bold", "color": "#00ccff", "marginBottom": "5px"}),
+                                    html.Div(f"{result['download']}", style={"fontSize": "28px", "fontWeight": "bold", "color": "#00ccff"}),
+                                    html.Div("Mbps", style={"fontSize": "12px", "color": "#ffffff"}),
+                                ],
+                                style={"textAlign": "center", "flex": "1"}
+                            ),
+                            html.Div(
+                                [
+                                    html.Div("UPLOAD", style={"fontSize": "12px", "fontWeight": "bold", "color": "#ffcc00", "marginBottom": "5px"}),
+                                    html.Div(f"{result['upload']}", style={"fontSize": "28px", "fontWeight": "bold", "color": "#ffcc00"}),
+                                    html.Div("Mbps", style={"fontSize": "12px", "color": "#ffffff"}),
+                                ],
+                                style={"textAlign": "center", "flex": "1"}
+                            ),
+                            html.Div(
+                                [
+                                    html.Div("PING", style={"fontSize": "12px", "fontWeight": "bold", "color": "#66ff66", "marginBottom": "5px"}),
+                                    html.Div(f"{result['ping']}", style={"fontSize": "28px", "fontWeight": "bold", "color": "#66ff66"}),
+                                    html.Div("ms", style={"fontSize": "12px", "color": "#ffffff"}),
+                                ],
+                                style={"textAlign": "center", "flex": "1"}
+                            ),
+                        ],
+                        style={
+                            "display": "flex",
+                            "justifyContent": "space-around",
+                            "marginBottom": "15px",
+                            "flexWrap": "wrap"
+                        }
+                    ),
+                    html.Div(
+                        f"Server: {result['server']} • {result['location']}",
+                        style={"textAlign": "center", "fontSize": "12px", "color": "#cccccc"}
+                    )
+                ]
+            else:
+                results_display = [
+                    html.H4("Speed Test Failed", style={"color": "#ff6666", "textAlign": "center"}),
+                    html.Div(result.get("error", "Unknown error"), style={"color": "#ffffff", "textAlign": "center"})
+                ]
+
+            return (
+                {"display": "none"},      # Hide visualization
+                {"display": "block"},     # Show results
+                results_display,          # Results content
+                False,                    # Set running state to false
+                False,                    # Enable button
+                "Speed Test"              # Reset button text
+            )
+
+    return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 @app.callback(
     Output("filtered-data", "data"),
@@ -811,8 +1150,8 @@ def update_button_style(state, tapo_status, current_style):
     Output("internet-status", "style"),
     Input("internet-interval", "n_intervals"),
 )
-async def update_internet_status_live(n):
-    status_text, bg_color = await check_live_internet_status_for_badge()
+def update_internet_status_live(n):
+    status_text, bg_color = check_live_internet_status_for_badge()
     logger.debug(f"Badge status: {status_text} color={bg_color}")
     return status_text, {
         "backgroundColor": bg_color,
@@ -837,6 +1176,29 @@ app.clientside_callback(
     Output("is-compact", "data"),
     Input("internet-interval", "n_intervals"),
     State("is-compact", "data"),
+)
+
+# Animate single progress bar during speed test
+app.clientside_callback(
+    """
+    function(is_running) {
+        if (is_running) {
+            // Show bar with consistent styling and animation
+            document.getElementById('speed-test-progress').style.display = 'block';
+            document.getElementById('speed-test-progress').style.backgroundColor = '#00ccff';
+            document.getElementById('speed-test-progress').classList.add('speed-test-loading');
+        } else {
+            // Hide bar and clear animation
+            document.getElementById('speed-test-progress').style.display = 'none';
+            document.getElementById('speed-test-progress').classList.remove('speed-test-loading');
+        }
+
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("speed-test-progress", "className"),
+    Input("speed-test-running", "data"),
+    prevent_initial_call=True
 )
 
 # ---------- Healthcheck ----------

@@ -1,6 +1,7 @@
 logs/
 .env
 AGENTS.md
+CLAUDE.md
 data/
 __pycache__/
 *.py[cod]
