@@ -21,7 +21,7 @@ If the connection is down for a sustained period, it can automatically power cyc
 
 ## 📊 Web Dashboard Interface
 
-![Dash Web App Screenshot](screenshots/dashboard.png)
+
 
 -----
 
