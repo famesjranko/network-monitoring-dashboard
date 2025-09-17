@@ -10,22 +10,22 @@ If the connection is down for a sustained period, it can automatically power cyc
 
 ## ✨ Features
 
-  * 📊 Interactive Web Dashboard: Visualize internet health with real-time graphs for uptime, latency, and packet loss using a Plotly Dash interface.
-  * 🤖 Automated Power Cycling: Automatically reboots your modem via a Tapo P100 smart plug after 5 consecutive failed checks.
-  * 👆 Manual Override: A "Restart NBN" button on the dashboard allows you to trigger a power cycle manually at any time.
-  * 🚀 Internet Speed Test: Built-in speed test functionality with animated progress visualization and clean results display.
-  * 🚀 Simple Docker Setup: Get up and running with a single `docker-compose up` command. No need to manually install any dependencies.
-  * 🗄️ SQLite Logging: All connectivity data is logged to an SQLite database within the container.
+  * Interactive Web Dashboard: Visualize internet health with real-time graphs for uptime, latency, and packet loss using a Plotly Dash interface.
+  * Automated Power Cycling: Automatically reboots your modem via a Tapo P100 smart plug after 5 consecutive failed checks.
+  * Manual Override: A "Restart NBN" button on the dashboard allows you to trigger a power cycle manually at any time.
+  * Internet Speed Test: Built-in speed test functionality with animated progress visualization and clean results display.
+  * Simple Docker Setup: Get up and running with a single `docker-compose up` command. No need to manually install any dependencies.
+  * SQLite Logging: All connectivity data is logged to an SQLite database within the container.
 
 -----
 
-## 📊 Web Dashboard Interface
+## Web Dashboard Interface
 
 ![Dash Web App Screenshot](screenshots/dashboard.png)
 
 -----
 
-## 🚀 Quickstart
+## Quickstart
 
 Getting the monitor running is simple. You just need Docker and Docker Compose installed.
 
@@ -94,7 +94,7 @@ http://localhost:8050
 
 -----
 
-## 🏗️ System Architecture
+## System Architecture
 
 This project runs the application container managed by Docker Compose.
 
@@ -114,7 +114,7 @@ docker compose -f docker-compose.yml -f docker-compose.redis.yml up -d
 
 -----
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -161,7 +161,7 @@ Copy `.env.example` to `.env` and set keys as needed. Common entries:
 
 -----
 
-## ⚙️ Usage and Management
+## Usage and Management
 
 ### Checking Logs
 
@@ -179,7 +179,7 @@ To stop the container, run:
 docker-compose down
 ```
 
-### ⚠️ Data Persistence
+### Data Persistence
 
 The compose file mounts two host directories for persistence by default:
 - `./data` -> `/app/data` (SQLite database)
@@ -208,7 +208,7 @@ The compose file maps `user: "${LOCAL_UID}:${LOCAL_GID}"` for the app service.
 
 -----
 
-## 🧰 Local Development
+## Local Development
 
 Run the app locally without Docker:
 
@@ -228,7 +228,7 @@ For best caching performance, run a local Redis (`redis-server`) or leave defaul
 
 -----
 
-## 🚀 Speed Test Feature
+## Speed Test Feature
 
 The dashboard includes a built-in internet speed test that measures download speed, upload speed, and ping latency:
 
@@ -262,7 +262,7 @@ The speed test is integrated seamlessly into the dashboard with:
 
 -----
 
-## 🧩 Advanced
+## Advanced
 
 - Enable Redis caching with an override:
 
