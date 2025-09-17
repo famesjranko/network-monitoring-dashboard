@@ -8,7 +8,7 @@ If the connection is down for a sustained period, it can automatically power cyc
 
 -----
 
-## ✨ Features
+## Features
 
   * Interactive Web Dashboard: Visualize internet health with real-time graphs for uptime, latency, and packet loss using a Plotly Dash interface.
   * Automated Power Cycling: Automatically reboots your modem via a Tapo P100 smart plug after 5 consecutive failed checks.
