@@ -255,7 +255,7 @@ The speed test is integrated seamlessly into the dashboard with:
 
 -----
 
-## 🔌 Power Cycling Behavior
+## Power Cycling Behavior
 
 - Manual: The dashboard button triggers `power_cycle_nbn_override.py` and logs a “manually triggered” power cycle event.
 - Automatic: `check_internet.sh` runs every minute and calls `power_cycle_nbn.py` after `FAILURE_THRESHOLD` consecutive full failures. The action respects `TAPO_COOLDOWN_SECONDS` to avoid rapid repeats.
