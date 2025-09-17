@@ -473,11 +473,10 @@ app.layout = html.Div(
                                 "cursor": "pointer",
                                 "backgroundColor": "#888888",
                                 "color": "#1e1e1e",
-                                "marginBottom": "15px",
                             },
                         ),
                     ],
-                    style={"textAlign": "right"}
+                    style={"textAlign": "right", "margin": "0"}
                 ),
                 html.Div(
                     id="speed-test-visualization",
@@ -521,7 +520,7 @@ app.layout = html.Div(
             ],
             style={
                 "backgroundColor": "#1e1e1e",
-                "padding": "20px",
+                "padding": "10px 20px",
                 "borderRadius": "8px",
                 "marginBottom": "20px",
             }

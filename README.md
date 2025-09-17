@@ -13,6 +13,7 @@ If the connection is down for a sustained period, it can automatically power cyc
   * 📊 Interactive Web Dashboard: Visualize internet health with real-time graphs for uptime, latency, and packet loss using a Plotly Dash interface.
   * 🤖 Automated Power Cycling: Automatically reboots your modem via a Tapo P100 smart plug after 5 consecutive failed checks.
   * 👆 Manual Override: A "Restart NBN" button on the dashboard allows you to trigger a power cycle manually at any time.
+  * 🚀 Internet Speed Test: Built-in speed test functionality with animated progress visualization and clean results display.
   * 🚀 Simple Docker Setup: Get up and running with a single `docker-compose up` command. No need to manually install any dependencies.
   * 🗄️ SQLite Logging: All connectivity data is logged to an SQLite database within the container.
 
@@ -224,6 +225,33 @@ bash scripts/check_internet.sh
 ```
 
 For best caching performance, run a local Redis (`redis-server`) or leave defaults; the app falls back gracefully if cache errors occur.
+
+-----
+
+## 🚀 Speed Test Feature
+
+The dashboard includes a built-in internet speed test that measures download speed, upload speed, and ping latency:
+
+### Using the Speed Test
+
+1. **Access**: Click the "Speed Test" button located in the dashboard
+2. **Progress**: Watch the animated progress bar during testing (typically 30-60 seconds)
+3. **Results**: View download/upload speeds (Mbps) and ping (ms) in a clean results display
+
+### Technical Details
+
+- **Library**: Uses the `speedtest-cli` Python library for accurate measurements
+- **Servers**: Automatically selects the best server based on ping
+- **No History**: Results are displayed temporarily and not stored in the database
+- **Visual Feedback**: Honest activity animation that doesn't show false progress
+
+### Speed Test Interface
+
+The speed test is integrated seamlessly into the dashboard with:
+- Right-aligned grey button for subtle presence
+- Animated progress visualization during testing
+- Clean results display with download, upload, and ping metrics
+- Server information showing test location
 
 -----
 
