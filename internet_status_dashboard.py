@@ -259,7 +259,7 @@ def parse_log(db_path: str) -> pd.DataFrame:
             df["min_latency_ms"] = df["min_latency_ms"].clip(upper=500)
             df["packet_loss"]   = df["packet_loss"].clip(upper=100)
 
-        logger.info("Data parsed successfully from the database.")
+        logger.debug("Data parsed successfully from the database.")
         return df
     except Exception as e:
         logger.error(f"Error parsing log: {e}")
@@ -310,7 +310,7 @@ def get_filtered_data(db_path: str, date_range: str):
             "min_latency_ms",
             "packet_loss",
         ]
-        logger.info(f"Returning filtered data with {len(fdf)} records.")
+        logger.debug(f"Returning filtered data with {len(fdf)} records.")
         return fdf[cols].to_dict("records")
     except Exception as e:
         logger.error(f"Redis Cache Error: {e}")
@@ -825,23 +825,53 @@ def fetch_data(n_minute, date_range):
 def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
     df = pd.DataFrame(filtered_data)
 
+    # Convert timestamps back to datetime (they're strings after JSON serialization)
+    # Need to preserve timezone information for correct filtering
+    if not df.empty and "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        # Ensure timezone-aware timestamps for proper comparison
+        if df["timestamp"].dt.tz is None:
+            # If timezone-naive, localize to display timezone
+            try:
+                df["timestamp"] = df["timestamp"].dt.tz_localize(DISPLAY_TZ)
+            except Exception:
+                # If already has some timezone info, try converting
+                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(DISPLAY_TZ)
+
     logger.debug("Update Dashboard Callback")
     logger.debug(f"Number of records: {len(df)}")
     if not df.empty:
-        logger.info(f"Timestamp range (display TZ {DISPLAY_TZ}): {df['timestamp'].min()} to {df['timestamp'].max()}")
+        logger.debug(f"Timestamp range (display TZ {DISPLAY_TZ}): {df['timestamp'].min()} to {df['timestamp'].max()}")
 
-    # Read power cycle events (read-only)
+    # Read power cycle events (read-only) and filter to match the data time range
     power_cycle_df = pd.DataFrame()
     try:
         with _connect_ro(DB_PATH) as conn:
             power_cycle_df = pd.read_sql_query("SELECT timestamp FROM power_cycle_events", conn)
         if not power_cycle_df.empty:
             power_cycle_df["timestamp"] = pd.to_datetime(power_cycle_df["timestamp"], format="mixed", utc=True)
-            power_cycle_df["timestamp"] = _to_display_tz(power_cycle_df["timestamp"])  # convert for UI
-            logger.debug(
-                f"Power cycle events: {power_cycle_df['timestamp'].min()} -> {power_cycle_df['timestamp'].max()} "
-                f"({len(power_cycle_df)} rows)"
-            )
+
+            # Filter power cycle events to match the filtered data time range
+            if not df.empty:
+                # df timestamps are in display TZ, so convert power cycle timestamps for comparison
+                power_cycle_df["timestamp"] = _to_display_tz(power_cycle_df["timestamp"])
+                min_time = df["timestamp"].min()
+                max_time = df["timestamp"].max()
+
+                power_cycle_df = power_cycle_df[
+                    (power_cycle_df["timestamp"] >= min_time) &
+                    (power_cycle_df["timestamp"] <= max_time)
+                ].copy()
+            else:
+                power_cycle_df["timestamp"] = _to_display_tz(power_cycle_df["timestamp"])
+
+            if not power_cycle_df.empty:
+                logger.debug(
+                    f"Power cycle events: {power_cycle_df['timestamp'].min()} -> {power_cycle_df['timestamp'].max()} "
+                    f"({len(power_cycle_df)} rows)"
+                )
+            else:
+                logger.debug("No power cycle events in the database.")
         else:
             logger.debug("No power cycle events found in the database.")
     except Exception as e:
