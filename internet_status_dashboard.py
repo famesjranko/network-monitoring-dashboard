@@ -293,7 +293,7 @@ def get_filtered_data(db_path: str, date_range: str):
         if df.empty:
             logger.warning("Parsed DataFrame is empty.")
             return []
-        fdf = filter_data_by_date(df, date_range)  # filter in UTC
+        fdf = filter_data_by_date(df, date_range).copy()  # filter in UTC
         if fdf.empty:
             logger.warning("Filtered DataFrame is empty after applying date range.")
             return []
