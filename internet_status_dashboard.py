@@ -826,17 +826,14 @@ def update_dashboard(filtered_data, selected_latency_metrics, is_compact):
     df = pd.DataFrame(filtered_data)
 
     # Convert timestamps back to datetime (they're strings after JSON serialization)
-    # Need to preserve timezone information for correct filtering
+    # The timestamps are already in DISPLAY_TZ with timezone info (e.g., "2025-10-04T13:39:07+10:00")
     if not df.empty and "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        # Ensure timezone-aware timestamps for proper comparison
-        if df["timestamp"].dt.tz is None:
-            # If timezone-naive, localize to display timezone
-            try:
-                df["timestamp"] = df["timestamp"].dt.tz_localize(DISPLAY_TZ)
-            except Exception:
-                # If already has some timezone info, try converting
-                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(DISPLAY_TZ)
+        try:
+            # Parse timestamps preserving their timezone information
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+        except Exception as e:
+            logger.error(f"Failed to parse timestamps: {e}, first value: {df['timestamp'].iloc[0] if len(df) > 0 else 'N/A'}")
+            raise
 
     logger.debug("Update Dashboard Callback")
     logger.debug(f"Number of records: {len(df)}")
