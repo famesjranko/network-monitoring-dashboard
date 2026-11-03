@@ -382,6 +382,23 @@ def run_speed_test():
         logger.error(f"Speed test error: {e}")
         return {"success": False, "error": f"Speed test failed: {str(e)}"}
 
+@cache.memoize(timeout=60)
+def _check_tapo_auth(email, password, device_ip):
+    """Real Tapo handshake + a read-only info fetch (no on/off toggle).
+    Memoized because this is a live round-trip to the device's local API,
+    and the caller below is polled every 2s by the UI."""
+    async def _probe():
+        client = ApiClient(email, password)
+        device = await client.p100(device_ip)
+        await device.get_device_info_json()
+
+    try:
+        asyncio.run(_probe())
+        return True, "Tapo device reachable and authenticated."
+    except Exception as e:
+        logger.warning(f"Tapo auth check failed: {e}")
+        return False, f"Tapo device reachable but authentication failed: {e}"
+
 def check_tapo_connection():
     email = os.environ.get("TAPO_EMAIL")
     password = os.environ.get("TAPO_PASSWORD")
@@ -394,24 +411,23 @@ def check_tapo_connection():
         logger.warning("Tapo credentials (email, password, or IP) are not set as environment variables.")
         return False, "Tapo credentials missing."
 
+    # Cheap reachability pre-check on every 2s tick, so an offline plug
+    # doesn't wait on a handshake timeout. The real auth check (which is
+    # what actually matters for "can we power-cycle the modem") is memoized.
     try:
-        # Simple socket test to device IP instead of full Tapo API
-        import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
-        result = sock.connect_ex((device_ip, 80))
+        reachable = sock.connect_ex((device_ip, 80)) == 0
         sock.close()
-
-        if result == 0:
-            logger.debug("Tapo device reachable")
-            return True, "Tapo device reachable."
-        else:
-            logger.debug("Tapo device unreachable")
-            return False, "Tapo device unreachable."
     except Exception as e:
-        # Log a concise warning without credentials
-        logger.warning(f"Tapo connectivity failed: {e}")
-        return False, f"Failed to connect to Tapo device: {e}"
+        logger.warning(f"Tapo reachability check failed: {e}")
+        reachable = False
+
+    if not reachable:
+        logger.debug("Tapo device unreachable")
+        return False, "Tapo device unreachable."
+
+    return _check_tapo_auth(email, password, device_ip)
 
 # ---------- Layout ----------
 

@@ -68,16 +68,21 @@ def update_cooldown_file():
     logging.info("Cooldown file updated with the current timestamp.")
 
 async def control_tapo():
+    """Returns True on a confirmed power cycle (or an intentional cooldown
+    skip), False on any failure. The caller uses this to set the process
+    exit code, since check_internet.sh trusts that code to decide whether
+    to log the power cycle as successful."""
 
     if not all([email, password, device_ip]):
         logging.critical("Tapo credentials (email, password, or IP) are not set as environment variables. "
                          "Cannot proceed with Tapo device control. Please set TAPO_EMAIL, TAPO_PASSWORD, and TAPO_DEVICE_IP.")
-        return # Exit
+        return False
 
+    device = None
     try:
         # Check if we are within cooldown period
         if is_in_cooldown():
-            return
+            return True
 
         # Initialize API client
         client = tapo.ApiClient(email, password)
@@ -109,12 +114,18 @@ async def control_tapo():
 
         # Print device info after successful operation
         await print_device_info(device)
+        return True
 
     except asyncio.TimeoutError:
         logging.error("The request timed out. Please check your network connection or the device.")
+        return False
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
-        await handle_exception(device)
+        if device is not None:
+            return await handle_exception(device)
+        else:
+            logging.error("Failed to initialize device connection. Cannot attempt recovery.")
+            return False
 
 async def handle_exception(device):
     # Retry logic on exception
@@ -129,12 +140,12 @@ async def handle_exception(device):
 
             # Print device info after successful retry
             await print_device_info(device)
-            return  # Exit the loop if successful
+            return True  # Exit the loop if successful
         except Exception as retry_error:
             logging.error(f"Retry attempt {attempt} failed: {retry_error}")
             if attempt == retry_attempts:
                 logging.critical(f"All retry attempts failed. Please check your connection.")
-                return
+                return False
 
 async def print_device_info(device):
     try:
@@ -147,5 +158,7 @@ async def print_device_info(device):
     except Exception as e:
         logging.error(f"Failed to retrieve device info: {e}")
 
-# Run the async function
-asyncio.run(control_tapo())
+# Run the async function; exit code reflects whether the plug was actually
+# controlled, since check_internet.sh only trusts this process's exit code.
+success = asyncio.run(control_tapo())
+sys.exit(0 if success else 1)

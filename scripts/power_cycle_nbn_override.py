@@ -46,6 +46,9 @@ def log_power_cycle_event(reason="Internet down for 5+ minutes"):
         logging.error(f"Failed to log power cycle event: {e}")
 
 async def control_tapo():
+    """Returns True on a confirmed power cycle, False on any failure, so the
+    exit code accurately reflects whether the plug was actually controlled."""
+    device = None
     try:
         # Initialize API client
         client = tapo.ApiClient(email, password)
@@ -59,29 +62,35 @@ async def control_tapo():
         logging.info(f"Session refreshed for {device_name}.")
 
         # Turn off the device
-        logging.info(f"Turning off {device_name}. (Simulated)")
-        await device.off() # leave commented out during testing - currently we are not testing
-        logging.info(f"{device_name} has been turned off. Waiting {wait_time} seconds. (Simulated)")
+        logging.info(f"Turning off {device_name}.")
+        await device.off()
+        logging.info(f"{device_name} has been turned off. Waiting {wait_time} seconds.")
 
         # Log the power cycle event
         log_power_cycle_event("manually triggered")
 
         # Wait for the specified period
         await asyncio.sleep(wait_time)
-        logging.info(f"Waited for {wait_time} seconds. Turning on {device_name}. (Simulated)")
+        logging.info(f"Waited for {wait_time} seconds. Turning on {device_name}.")
 
         # Turn the device back on
-        await device.on() # we can leave this commented out during testing - currently we are not testing
+        await device.on()
         logging.info(f"{device_name} has been turned back on.")
 
         # Print device info after successful operation
         await print_device_info(device)
+        return True
 
     except asyncio.TimeoutError:
         logging.error("The request timed out. Please check your network connection or the device.")
+        return False
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
-        await handle_exception(device)
+        if device is not None:
+            return await handle_exception(device)
+        else:
+            logging.error("Failed to initialize device connection. Cannot attempt recovery.")
+            return False
 
 async def handle_exception(device):
     # Retry logic on exception
@@ -97,11 +106,11 @@ async def handle_exception(device):
 
             # Print device info after successful retry
             await print_device_info(device)
-            return  # Exit the loop if successful
+            return True  # Exit the loop if successful
         except Exception as retry_error:
             if attempt == retry_attempts:
                 logging.info(f"OVERIDE: All retry attempts failed. Please check your connection.")
-                return
+                return False
 
 async def print_device_info(device):
     try:
@@ -114,5 +123,6 @@ async def print_device_info(device):
     except Exception as e:
         logging.error(f"Failed to retrieve device info: {e}")
 
-# Run the async function
-asyncio.run(control_tapo())
+# Run the async function; exit code reflects whether the plug was actually controlled.
+success = asyncio.run(control_tapo())
+sys.exit(0 if success else 1)
